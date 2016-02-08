@@ -21,5 +21,5 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
  * USA.
  */
-
+//这就定义了一个函数, 而且看起来只在distcc.c中调用过
 int dcc_find_compiler(char **argv, char ***);

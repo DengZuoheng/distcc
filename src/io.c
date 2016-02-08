@@ -61,18 +61,20 @@
 #include "exitcode.h"
 
 
-
+//返回io的超时设置
 int dcc_get_io_timeout(void)
 {
     /** Timeout for all IO other than opening connections.  Much longer,
      * because compiling files can take a long time. **/
     static const int default_dcc_io_timeout = 300; /* seconds */
+    //超时的默认这是
     static int current_timeout = 0;
-
+    //静态的, 只取一次就好
     if (current_timeout > 0)
         return current_timeout;
 
     const char *user_timeout = getenv("DISTCC_IO_TIMEOUT");
+    //从环境变量中去设置
     if (user_timeout) {
         int parsed_user_timeout = atoi(user_timeout);
         if (parsed_user_timeout <= 0) {
@@ -81,6 +83,7 @@ int dcc_get_io_timeout(void)
         }
         current_timeout = parsed_user_timeout;
     } else {
+        //取不到就默认咯
         current_timeout = default_dcc_io_timeout;
     }
     return current_timeout;
@@ -147,7 +150,7 @@ int dcc_select_for_write(int fd, int timeout)
     tv.tv_sec = timeout;
     tv.tv_usec = 0;
 
-    while (1) {
+    while (1) {//一直select到有正常的结果位置
         FD_ZERO(&write_fds);
         FD_ZERO(&except_fds);
         FD_SET(fd, &write_fds);
@@ -156,13 +159,13 @@ int dcc_select_for_write(int fd, int timeout)
 
         rs = select(fd + 1, NULL, &write_fds, &except_fds, &tv);
 
-        if (rs == -1 && errno == EINTR) {
+        if (rs == -1 && errno == EINTR) {//这是中断
             rs_trace("select was interrupted");
             continue;
-        } else if (rs == -1) {
+        } else if (rs == -1) {//这是不明原因
             rs_log_error("select failed: %s", strerror(errno));
             return EXIT_IO_ERROR;
-        } else if (rs == 0) {
+        } else if (rs == 0) {//这是超时
             rs_log_error("IO timeout");
             return EXIT_IO_ERROR;
         } else {
@@ -177,6 +180,7 @@ int dcc_select_for_write(int fd, int timeout)
                * will also set errno properly so that we can give a
                * good error message at that point.
                */
+               //虽然不知道为什么错, 不过这里返回正确让你再写一次, 说不定能找到为什么错
             }
             return 0;
         }
@@ -225,6 +229,7 @@ int dcc_readx(int fd, void *buf, size_t len)
  *
  * @returns 0 or exit code.
  **/
+ //二进制写入文件
 int dcc_writex(int fd, const void *buf, size_t len)
 {
     ssize_t r;
@@ -233,18 +238,21 @@ int dcc_writex(int fd, const void *buf, size_t len)
     while (len > 0) {
         r = write(fd, buf, len);
 
+        //文件被锁定, 就select_for_write(会超时)
         if (r == -1 && errno == EAGAIN) {
             if ((ret = dcc_select_for_write(fd, dcc_get_io_timeout())))
+                //select完为什么就返回了?还是select成功就继续写?
+                // 这里看不懂啊
                 return ret;
             else
                 continue;
-        } else if (r == -1 && errno == EINTR) {
+        } else if (r == -1 && errno == EINTR) {//中断是什么意思?
             continue;
-        } else if (r == -1) {
+        } else if (r == -1) { //不知道什么回事, 反正没成功
             rs_log_error("failed to write: %s", strerror(errno));
             return EXIT_IO_ERROR;
         } else {
-            buf = &((char *) buf)[r];
+            buf = &((char *) buf)[r];//一次写不完, 继续写, 写完为止
             len -= r;
         }
     }

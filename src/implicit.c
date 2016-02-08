@@ -84,14 +84,14 @@
 int dcc_find_compiler(char **argv, char ***out_argv)
 {
     int ret;
-    if (argv[1][0] == '-'
-        || dcc_is_source(argv[1])
-        || dcc_is_object(argv[1])) {
+    if (argv[1][0] == '-'|| dcc_is_source(argv[1])|| dcc_is_object(argv[1])) {
         if ((ret = dcc_copy_argv(argv, out_argv, 0)) != 0) {
+            //先copy, 异常就直接返回
             return ret;
         }
 
         /* change "distcc -c foo.c" -> "cc -c foo.c" */
+        //把第一个参数变了, 万一第一个参数不是distcc也不是cc呢?
         free((*out_argv)[0]);
         (*out_argv)[0] = strdup("cc");
         if ((*out_argv)[0] == NULL) {
@@ -100,6 +100,8 @@ int dcc_find_compiler(char **argv, char ***out_argv)
         return 0;
     } else {
         /* skip "distcc", point to "gcc -c foo.c"  */
+        //这里的意思是说可能是" distcc gcc -c foo.c" 也可能是"distcc -c foo.c"
+        //后者算上面这种情况
         return dcc_copy_argv(argv + 1, out_argv, 0);
     }
 }

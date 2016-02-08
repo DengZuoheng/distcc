@@ -20,7 +20,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
  * USA.
  */
-
+//////////////////////////////////////////////////////以上是协议
 /*  dcc_randomize_host_list() and friends:
  *   Author: Josh Hyman <joshh@google.com>
  */
@@ -36,9 +36,11 @@
  *
  * Routines to parse <tt>$DISTCC_HOSTS</tt>.  Actual decisions about
  * where to run a job are in where.c.
+ // 这是用来解析 distcc_hosts环境变量的, 决定具体在哪跑job是where.c的事情
  *
  * The grammar of this variable is, informally:
  *
+ 下面这个是语法
   DISTCC_HOSTS = HOSTSPEC ...
   HOSTSPEC = LOCAL_HOST | SSH_HOST | TCP_HOST | OLDSTYLE_TCP_HOST
                         | GLOBAL_OPTION
@@ -50,6 +52,8 @@
   OPTIONS = ,OPTION[OPTIONS]
   OPTION = lzo | cpp
   GLOBAL_OPTION = --randomize
+  既支持ssh, 也支持tcp, oldstyle不知道, option看来也只有lzo和cpp, 
+  hostname看来是可以dns的
  *
  * Any amount of whitespace may be present between hosts.
  *
@@ -133,6 +137,7 @@ int dcc_compare_container(const void *a, const void *b);
  * Really this needs to be in util.c, but it's only used here.
  **/
 char *strndup(const char *src, size_t size);
+//这个就确实是轮子了吧
 char *strndup(const char *src, size_t size)
 {
     char *dst;
@@ -154,9 +159,11 @@ char *strndup(const char *src, size_t size)
  * taken from $DISTCC_DIR/hosts, if that exists.  Otherwise, they are taken
  * from ${sysconfdir}/distcc/hosts, if that exists.  Otherwise, we fail.
  **/
+ // 这是要返回所有host的
 int dcc_get_hostlist(struct dcc_hostdef **ret_list,
                      int *ret_nhosts)
 {
+    //总共有三种配置方式:环境变量, top目录(临时文件?)配置文件, 系统配置文件
     char *env;
     char *path, *top;
     int ret;
@@ -170,22 +177,22 @@ int dcc_get_hostlist(struct dcc_hostdef **ret_list,
     }
 
     /* $DISTCC_DIR or ~/.distcc */
-    if ((ret = dcc_get_top_dir(&top)) == 0) {
+    if ((ret = dcc_get_top_dir(&top)) == 0) {//dcc_get_top_dir在distcc.h中定义, 在tempfiles中实现
         /* if we failed to get it, just warn */
 
-        checked_asprintf(&path, "%s/hosts", top);
+        checked_asprintf(&path, "%s/hosts", top);//这应该是配置文件的意思
         if (path != NULL && access(path, R_OK) == 0) {
-            ret = dcc_parse_hosts_file(path, ret_list, ret_nhosts);
+            ret = dcc_parse_hosts_file(path, ret_list, ret_nhosts);//如果没有环境变量, 就解析配置文件
             free(path);
-            return ret;
+            return ret;//这里返回了一次
         } else {
             rs_trace("not reading %s: %s", path, strerror(errno));
             free(path);
         }
     }
-
-    checked_asprintf(&path, "%s/distcc/hosts", SYSCONFDIR);
-    if (path != NULL && access(path, R_OK) == 0) {
+    //万一连top目录都找不到, 就访问系统的配置目录
+    checked_asprintf(&path, "%s/distcc/hosts", SYSCONFDIR);//这个SYSCONFDIR宏很可能是make的时候才定义进来的
+    if (path != NULL && access(path, R_OK) == 0) {//要检查能不能访问, 权限不一定有
         ret = dcc_parse_hosts_file(path, ret_list, ret_nhosts);
         free(path);
         return ret;
@@ -433,26 +440,31 @@ int dcc_get_features_from_protover(enum dcc_protover protover,
 /** Given a host with its feature fields set, set
  *  its protover appropriately. Return the protover,
  *  or -1 on error.
+ // protover是什么意思
  */
 int dcc_get_protover_from_features(enum dcc_compress compr,
                                    enum dcc_cpp_where cpp_where,
                                    enum dcc_protover *protover)
 {
-    *protover = -1;
+    *protover = -1;// 这个应该为proto_ver
 
     if (compr == DCC_COMPRESS_NONE && cpp_where == DCC_CPP_ON_CLIENT) {
+        //不压缩, 在本地预处理
         *protover = DCC_VER_1;
     }
 
     if (compr == DCC_COMPRESS_LZO1X && cpp_where == DCC_CPP_ON_SERVER) {
+        //压缩, 在远程预处理
         *protover = DCC_VER_3;
     }
 
     if (compr == DCC_COMPRESS_LZO1X && cpp_where == DCC_CPP_ON_CLIENT) {
+        //压缩, 在本地预处理
         *protover = DCC_VER_2;
     }
 
     if (compr == DCC_COMPRESS_NONE && cpp_where == DCC_CPP_ON_SERVER) {
+        //不压缩, 在远程预处理, 这样不行
         rs_log_error("pump mode (',cpp') requires compression (',lzo')");
     }
 

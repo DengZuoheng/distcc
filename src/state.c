@@ -54,33 +54,42 @@ static struct dcc_task_state *direct_my_state(const enum dcc_host target);
  * This file provides a way for distcc processes to make little notes
  * about what they're up to that can be read by a monitor process.
  *
+ // 这里提供了一些方法给管理程序去读
  * State is stored as follows.
  *
  * Within our temporary directory, we create a subdirectory called "state".
  *
+ //临时文件目录有个state文件夹
  * Each process creates a file named "binstate%d", for its pid.  We
  * always rewrite this file from the beginning.
  *
+ //每个process都存着一个进程唯一的文件, 每次启动都重写
  * Inside each of these, we store a binary struct in the native host
  * encoding.  Ugly, but quick and easy both in code and CPU time.
  *
+ // 这个文件就直接存二进制了, 这样性能比较好
  * Any process reading these files needs to handle the fact that they may be
  * truncated or otherwise incorrect.
  *
+ // 但是读出来的信息不一定是正确而完整的
  * When the process exits, it removes its state file.  If you didn't
  * notice it already, it's too late now.
  *
+ // 进程退出就给删除了, 要看尽快
+
  * In addition, if the process identified by the file no longer
  * exists, then the file must be orphaned by a process that suddenly
  * terminated.  The file is ignored and can be deleted by the first
  * process that notices it.
- *
+ // 卧槽这什么意思?
  * The reader interface for these files is in mon.c
  *
+ // mon.c提供了一些读取的接口
  * These files are considered a private format, and they may change
  * between distcc releases.  The only supported way to read them is
  * through mon.c.
  **/
+ //天晓得格式说明时候会变, 所以老老实实用mon.c来读取
 
 
 /**
@@ -88,23 +97,27 @@ static struct dcc_task_state *direct_my_state(const enum dcc_host target);
  *
  * (This can't reliably be static because we might fork...)
  **/
+ //get一个当前进程的state文件
 static int dcc_get_state_filename(char **fname)
 {
     int ret;
     char *dir;
 
-    if ((ret = dcc_get_state_dir(&dir)))
+    if ((ret = dcc_get_state_dir(&dir)))//取得state文件的目录
         return ret;
-
+    //这个asprinft是怎么回事?
+    //这个asprintf定义在snprintf.h中, 应该是自动分配内存的sprintf
+    //golang中有fmt包可以用
     if (asprintf(fname, "%s/%s%ld",
-                 dir, dcc_state_prefix, (long) getpid()) == -1) {
+                 dir, dcc_state_prefix, (long) getpid()) == -1) {//然后拼接出完整的文件名
+        //存到fname中, fname是二级指针
         return EXIT_OUT_OF_MEMORY;
     }
 
     return 0;
 }
 
-
+//返回阶段的名字, 这个算是一个map吗?
 const char *dcc_get_phase_name(enum dcc_phase phase)
 {
     switch (phase) {
@@ -134,6 +147,7 @@ const char *dcc_get_phase_name(enum dcc_phase phase)
  * Get a file descriptor for writing to this process's state file.
  * file.
  **/
+ // open那个state文件准备写入读出
 static int dcc_open_state(int *p_fd,
                           const char *fname)
 {
@@ -162,7 +176,7 @@ void dcc_remove_state_file (void)
 
     if ((ret = dcc_get_state_filename(&fname)))
         return;
-
+    //get到当前进程state文件, 然后删掉它
     if (unlink(fname) == -1) {
         /* It's OK if we never created it */
         if (errno != ENOENT) {
@@ -176,14 +190,15 @@ void dcc_remove_state_file (void)
     (void) ret;
 }
 
-
+//把state对象写入文件中
 static int dcc_write_state(int fd)
 {
     int ret;
 
     /* Write out as one big blob.  fd is positioned at the start of
      * the file. */
-
+    //mystate是个全局对象
+    //dcc_writex定义在distcc.h, 实现在io.c, 表示二进制写入文件, 返回是否成功
     if ((ret = dcc_writex(fd, my_state, sizeof *my_state)))
         return ret;
 
@@ -256,11 +271,11 @@ int dcc_note_state(enum dcc_phase state,
     return 0;
 }
 
-
+//给本进程的state对象设置slot
 void dcc_note_state_slot(int slot, enum dcc_host target)
 {
-	if (direct_my_state(target))
-		my_state->slot = slot;
+	if (direct_my_state(target))//这个函数会改变my_state的值
+		my_state->slot = slot;//my_state是一个全局变量, 定义在上面
 }
 
 
@@ -274,11 +289,11 @@ static struct dcc_task_state *direct_my_state(const enum dcc_host target)
 	switch (target)
 	{
 		case DCC_LOCAL:
-			my_state = &local_state;
+			my_state = &local_state;//这个是个全局变量, 至于什么时候复制的就不知道了
 			break;
 
 		case DCC_REMOTE:
-			my_state = &remote_state;
+			my_state = &remote_state;//同上
 			break;
 
 		case DCC_UNKNOWN:

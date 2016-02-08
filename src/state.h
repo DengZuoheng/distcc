@@ -35,6 +35,7 @@ int dcc_open_state_file (int *p_fd);
 /* Note that these must be in the order in which they are encountered
  * for the state file to work properly.  It's OK if some are skipped
  * though. */
+ // 这个顺序是有关系的
 enum dcc_phase {
     DCC_PHASE_STARTUP,
     DCC_PHASE_BLOCKED,
@@ -71,24 +72,26 @@ extern const char *dcc_state_prefix;
  * This should be <4kB, so that it will normally be written out
  * atomically.
  **/
+ //任务状态
 struct dcc_task_state {
     size_t struct_size;
     unsigned long magic;
     unsigned long cpid;          /**< Client pid */
     char file[128];             /**< Input filename  */
-    char host[128];             /**< Destination host description */
-    int slot;                   /**< Which CPU slot for this host */
+    char host[128];             /**< Destination host description *///目标主机描述
+    int slot;                   /**< Which CPU slot for this host *///又出现slot, 这什么意思
 
-    enum dcc_phase curr_phase;
+    enum dcc_phase curr_phase; //phase是阶段的意思
 
     /** In memory, point to the next in a list of all tasks.  In the
      * file, undefined. */
-    struct dcc_task_state *next;
+    struct dcc_task_state *next;//这还是个链表呢?
 };
 
-
+//顾名思义, get一个"阶段"的name
 const char *dcc_get_phase_name(enum dcc_phase);
 
+//标记slot的类型
 void dcc_note_state_slot(int slot, enum dcc_host target);
 
 #ifdef __cplusplus

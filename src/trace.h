@@ -5,6 +5,7 @@
  * Copyright (C) 2000, 2001, 2002, 2003, 2004 by Martin Pool
  * Copyright 2007 Google Inc.
  *
+ // 这还是google的copyright!!!
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
  * the Free Software Foundation; either version 2.1 of the License, or
@@ -26,6 +27,7 @@
  *
  * Reusable trace library.
  *
+ // 这相当于一个trace库
  * @todo A function like perror that includes strerror output.  Apache
  * does this by adding flags as well as the severity level which say
  * whether such information should be included.

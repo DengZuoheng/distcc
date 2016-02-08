@@ -87,7 +87,7 @@ static const char *rs_severities[] = {
 /**********************************************************************
  * Functions for manipulating the list of loggers
  **********************************************************************/
-
+//移除所有logger
 void rs_remove_all_loggers(void)
 {
     struct rs_logger_list *l, *next;
@@ -99,7 +99,7 @@ void rs_remove_all_loggers(void)
     logger_list = NULL;
 }
 
-
+//push_back一个logger
 void rs_add_logger(rs_logger_fn fn,
                    int max_level,
                    void *private_ptr,
@@ -123,6 +123,7 @@ void rs_add_logger(rs_logger_fn fn,
 /**
  * Remove only the logger that exactly matches the specified parameters
  **/
+ // 查找并移除一个logger, 这个equal函数有点强啊
 void rs_remove_logger(rs_logger_fn fn,
                       int max_level,
                       void *private_ptr,
@@ -152,7 +153,8 @@ void rs_remove_logger(rs_logger_fn fn,
 void
 rs_trace_set_level(rs_loglevel level)
 {
-    rs_trace_level = level;
+    rs_trace_level = level;//rs_trace_level是一个全局变量, 相当于log level
+    //这里还是看一下这个level怎么用的才行, 不然太危险
 }
 
 
@@ -162,6 +164,7 @@ rs_trace_set_level(rs_loglevel level)
  *
  * Returns -1 for invalid names.
  */
+ // 字符串名字到level的映射, 没有map真悲剧
 int
 rs_loglevel_from_name(const char *name)
 {
@@ -190,6 +193,7 @@ rs_loglevel_from_name(const char *name)
  * If you don't initialize a logger before first logging, then we
  * write to stderr by default.
  **/
+ //logger没有初始设置, 就弄成std_err
 static void rs_lazy_default(void)
 {
     static int called;
@@ -200,6 +204,7 @@ static void rs_lazy_default(void)
     called = 1;
     if (logger_list == NULL)
         rs_add_logger(rs_logger_file, RS_LOG_WARNING, NULL, STDERR_FILENO);
+    //但是我很好奇, 这里加了一个std_err,不移除吗?
 }
 
 /* Heart of the matter */
@@ -212,7 +217,8 @@ rs_log_va(int flags, char const *caller_fn_name, char const *fmt, va_list va)
     struct rs_logger_list *l;
 
     rs_lazy_default();
-
+    //不定参数的log, 每个logger都log一下
+    //不过golang也有不定参数, 但是得研究一下参数是否需要显式复制
     if (level <= rs_trace_level)
       for (l = logger_list; l; l = l->next)
           if (level <= l->max_level) {
@@ -225,9 +231,10 @@ rs_log_va(int flags, char const *caller_fn_name, char const *fmt, va_list va)
                     fmt, copied_va, l->private_ptr, l->private_int);
               VA_COPY_END(copied_va);
           }
+
 }
 
-
+//这是格式化输出
 void rs_format_msg(char *buf,
                    size_t buf_len,
                    int flags,
@@ -430,7 +437,7 @@ rs_supports_trace(void)
 #endif                /* !DO_RS_TRACE */
 }
 
-
+// 这里有个summary不知道怎么回事
 static char job_summary[4096];
 void dcc_job_summary_clear(void) {
     job_summary[0] = 0;

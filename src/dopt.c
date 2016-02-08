@@ -210,6 +210,8 @@ static void distccd_show_usage(void)
 /*
  * Print out the name of the principal.
  */
+ //这个distcc.c主函数中调用过一次, 其实就是打印一个环境变量
+ //这个环境变量在auth_distccd.c中使用过
 static void dcc_gssapi_show_principal(void) {
     char *princ_env_val = NULL;
 

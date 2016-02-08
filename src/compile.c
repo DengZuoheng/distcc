@@ -62,17 +62,22 @@
 
 /**
  * This boolean is true iff --scan-includes option is enabled.
+如果设置了 --scan-includes选项, 这个bool变量就设为true
+
  * If so, distcc will just run the source file through the include server,
  * and print out the list of header files that might be #included,
  * rather than actually compiling the sources.
  */
+ // 如果设为true了, distcc就仅是在include server处理源文件, 然后输出可能包含的头文件,
+ // 而不是真的去编译源文件.
 int dcc_scan_includes = 0;
 
 static const char *const include_server_port_suffix = "/socket";
 static const char *const discrepancy_suffix = "/discrepancy_counter";
 
-static int dcc_get_max_discrepancies_before_demotion(void)
+static int dcc_get_max_discrepancies_before_demotion(void)//demotion的意思是降级
 {
+    //获取一个从环境变量拿回来的值
     /* Warning: the default setting here should have the same value as in the
      * pump.in script! */
     static const int default_setting = 1;
@@ -100,25 +105,32 @@ static int dcc_get_max_discrepancies_before_demotion(void)
  * discrepancies (a compilation failing on the server, but succeeding
  * locally. This function may return NULL in @param filename if the name cannot
  * be determined.
+ filename参数是用来返回的, 应该只有一个filename, 这个是我们用于"一元运算计数器"
+ 用来计算差异(就是那种在远程服务器编译失败, 但是在本地成功的)
+ 函数有可能返回空
  **/
 int dcc_discrepancy_filename(char **filename)
 {
-    const char *include_server_port = getenv("INCLUDE_SERVER_PORT");
+    const char *include_server_port = getenv("INCLUDE_SERVER_PORT");//这个环境变量不知道哪里来的
     *filename = NULL;
     if (include_server_port == NULL) {
         return 0;
-    } else if (str_endswith(include_server_port_suffix,
+    } else if (str_endswith(include_server_port_suffix,//普通的util函数
+        //这个是全局变量, 就定义在上面
                             include_server_port)) {
         /* We're going to make a longer string from include_server_port: one
          * that replaces include_server_port_suffix with discrepancy_suffix. */
         int delta = strlen(discrepancy_suffix) -
             strlen(include_server_port_suffix);
+        //这里要把前缀换掉
         assert (delta > 0);
         *filename = malloc(strlen(include_server_port) + 1 + delta);
+        //然后开一段内存
         if (!*filename) {
             rs_log_error("failed to allocate space for filename");
             return EXIT_OUT_OF_MEMORY;
         }
+        //然后复制过来
         strcpy(*filename, include_server_port);
         int slash_pos = strlen(include_server_port)
                         - strlen(include_server_port_suffix);
@@ -126,7 +138,9 @@ int dcc_discrepancy_filename(char **filename)
          * we expect to find a '/' at slash_pos in filename. */
         assert((*filename)[slash_pos] == '/');
         (void) strcpy(*filename + slash_pos, discrepancy_suffix);
+        //然后替换前缀
         return 0;
+        //实际上, 这里只是获取一个环境变量, 然后把前缀换掉, 就变成了文件名, 然后返回
     } else
         return 0;
 }
@@ -137,6 +151,7 @@ int dcc_discrepancy_filename(char **filename)
  * memory; return 0 if it's not possible to determine the length (if
  * e.g. @param discrepancy_filename is NULL).
  **/
+// 返回一个长度, 是那个什么文件的长度
 static int dcc_read_number_discrepancies(const char *discrepancy_filename)
 {
     if (!discrepancy_filename) return 0;
@@ -198,24 +213,33 @@ static void dcc_perhaps_adjust_cpp_where_and_protover(
 {
     /* It's unfortunate that the variable that controls preprocessing is in the
        "host" datastructure. See elaborate complaint in dcc_build_somewhere. */
+    //很遗憾决定在哪里预处理的设置是在host结构中. 请认真看dcc_build_somewhere
+    //的各种抱怨
 
     /* Check whether there has been too much trouble running distcc-pump during
        this build. */
+    // 检查这次build是否在跑distcc-pump过程中已经出现了太多的问题
+    // 这个discrepancy_filename是从环境变量中get回来的,
+    // max_discrepancies也是从环境变量中get回来的
+    // dcc_read_number_dis...实现在上面
     if (dcc_read_number_discrepancies(discrepancy_filename) >=
         dcc_get_max_discrepancies_before_demotion()) {
+        //如果discrepancies已经大于max_discrepancies
+        // 就不使用distcc-pump了
         /* Give up on using distcc-pump */
-        host->cpp_where = DCC_CPP_ON_CLIENT;
+        host->cpp_where = DCC_CPP_ON_CLIENT;//改成在本地预处理
         dcc_get_protover_from_features(host->compr,
                                        host->cpp_where,
                                        &host->protover);
     }
 
     /* Don't do anything silly for already preprocessed files. */
-    if (dcc_is_preprocessed(input_fname)) {
+    if (dcc_is_preprocessed(input_fname)) {//已经预处理过的文件就别做傻事了
         /* Don't subject input file to include analysis. */
         rs_log_warning("cannot use distcc_pump on already preprocessed file"
                        " (such as emitted by ccache)");
         host->cpp_where = DCC_CPP_ON_CLIENT;
+        // 相当于获取压不压缩, 在不在本地预处理的信息
         dcc_get_protover_from_features(host->compr,
                                        host->cpp_where,
                                        &host->protover);
@@ -224,6 +248,7 @@ static void dcc_perhaps_adjust_cpp_where_and_protover(
      * -I's. Beware! */
     if (getenv("CPATH") || getenv("C_INCLUDE_PATH")
         || getenv("CPLUS_INCLUDE_PATH")) {
+        //如果各种path都拿不到, 就改成本地预处理
         rs_log_warning("cannot use distcc_pump with any of environment"
                        " variables CPATH, C_INCLUDE_PATH or CPLUS_INCLUDE_PATH"
                        " set, preprocessing locally");
@@ -447,44 +472,74 @@ static int dcc_please_send_email_after_investigation(
 
 /**
  * Execute the commands in argv remotely or locally as appropriate.
+ //视情况本地或远程执行argv中的命令
  *
  * We may need to run cpp locally; we can do that in the background
  * while trying to open a remote connection.
  *
+ //我们可能需要在本地跑cpp; 我们可以在我们开远程连接的时候做这事
+
  * This function is slightly inefficient when it falls back to running
- * gcc locally, because cpp may be run twice.  Perhaps we could adjust
- * the command line to pass in the .i file.  On the other hand, if
- * something has gone wrong, we should probably take the most
+ * gcc locally, because cpp may be run twice.  
+// 这个函数当我们要在本地运行gcc的时候可能会低效率, 因为cpp可能运行两次 //卧槽, 为什么两次?
+
+ Perhaps we could adjust the command line to pass in the .i file.  
+// 也许我们可以调整命令, 使其pass in the .i file, //卧槽, 点i文件是什么?
+// 据http://www.cnblogs.com/ggjucheng/archive/2011/12/14/2287738.html这里说, .i是预处理文件
+ 
+ On the other hand, if something has gone wrong, we should probably take the most
  * conservative course and run the command unaltered.  It should not
  * be a big performance problem because this should occur only rarely.
- *
+ // 如果出现了什么错误, 我们就以最保守的方式执行命令. 但是这不会成为严重的性能问题, 因为
+ // 这并不常发生
  * @param argv Command to execute.  Does not include 0='distcc'.
  * Must be dynamically allocated.  This routine deallocates it.
  *
+ // argv是要执行的命令, 们得保证argv[0]不是distcc, 以及argv是动态分配的, 以为这个函数会
+ //把它析构掉
  * @param status On return, contains the waitstatus of the compiler or
  * preprocessor.  This function can succeed (in running the compiler) even if
- * the compiler itself fails.  If either the compiler or preprocessor fails,
- * @p status is guaranteed to hold a failure value.
- *
+ * the compiler itself fails.  
+ // status是用来返回的, 包含编译器和预处理器的"等待状态"
+ // 这个函数甚至在编译器出错了都会返回成功信息
+ 
+ * If either the compiler or preprocessor fails,
+ *   @p status is guaranteed to hold a failure value.
+ //如果编译器和预处理器失败了, p参数会采集失败信息
+
+//下面是实现描述
  * Implementation notes:
  *
  * This code might be simpler if we would only acquire one lock
- * at a time.  But we need to choose the server host in order
+ * at a time.  
+// 如果我们一次只获取一个lock, 我们的代码会简单一些
+ But we need to choose the server host in order
  * to determine whether it supports pump mode or not,
  * and choosing the server host requires acquiring its lock
  * (otherwise it might be busy when we we try to acquire it).
+ // 但是, 我们需要选择host去判断其是否支持pump模式, 然后请求他的lock,
+ // 另外, 我们请求锁时, 它可能是"忙"的,
  * So if the server chosen is not localhost, we need to hold the
  * remote host lock while we're doing local preprocessing or include
  * scanning.  Since local preprocessing/include scanning requires
  * us to acquire the local cpu lock, that means we need to hold two
  * locks at one time.
  *
+ // 所以, 如果我们选择的不是localhost, 在我们本地预处理和include扫描的时候,
+ //我们就需要掌握远程主机锁(remote host lock). 因为本地预处理和include扫描要求我们请求
+ // 本地cpu锁, 这意味着我们同一时间需要掌握两个锁.
+
  * TODO: make pump mode a global flag, and drop support for
  * building with cpp mode on some hosts and not on others.
  * Then change the code so that we only choose the remote
  * host after local preprocessing/include scanning is finished
  * and the local cpu lock is released.
  */
+// 这里有个todo!!!!!!!!!!!!
+ // 弄一个pump mode的全局flag, 然后drop掉一些远程主机的cpp模式支持但另一些不drop,
+ // 然后改变代码是的们在预处理/include扫描完成以及本地cpu lock释放后, 仅仅选择远程主机
+ // 卧槽这什么意思?
+
 static int
 dcc_build_somewhere(char *argv[],
                     int sg_level,
@@ -506,24 +561,30 @@ dcc_build_somewhere(char *argv[],
     char **new_argv;
 
     if ((ret = dcc_expand_preprocessor_options(&argv)) != 0)
-        goto clean_up;
+    //这个函数实现在arg.c, 目的是吧"Wp,"形式的选项处理掉
+        goto clean_up;//不成功就clean_up
 
     if ((ret = dcc_discrepancy_filename(&discrepancy_filename)))
+        //这个实现在上面, 把discrepancy_filename存到参数里面
         goto clean_up;
 
     if (sg_level) /* Recursive distcc - run locally, and skip all locking. */
+        //如果是递归调用, 就在本地运行
         goto run_local;
 
-    /* TODO: Perhaps tidy up these gotos. */
+    /* TODO: Perhaps tidy up these gotos. *///各种goto被吐槽了
 
-    /* FIXME: this may leak memory for argv. */
+    /* FIXME: this may leak memory for argv. *///内存泄露应该不管我事吧
 
     ret = dcc_scan_args(argv, &input_fname, &output_fname, &new_argv);
+    //扫描argv, 处理一些需要本地操作的选项, 看看有没有-o, 没有就尽量自动补全
     dcc_free_argv(argv);
+    //因为扫描的过程中复制到了new_argv, 所以这里释放掉
     argv = new_argv;
     if (ret != 0) {
         /* we need to scan the arguments even if we already know it's
          * local, so that we can pick up distcc client options. */
+        //dcc_scan_args的结果导致我们本地运行
         goto lock_local;
     }
 
@@ -531,30 +592,37 @@ dcc_build_somewhere(char *argv[],
     /* turned off because we never spend long in this state. */
     dcc_note_state(DCC_PHASE_STARTUP, input_fname, NULL);
 #endif
-    if ((ret = dcc_make_tmpnam("distcc_server_stderr", ".txt",
+    if ((ret = dcc_make_tmpnam("distcc_server_stderr", ".txt",//这里创建临时文件是带有随机串保证唯一的
                                &server_stderr_fname))) {
         /* So we are failing locally to make a temp file to store the
          * server-side errors in; it's unlikely anything else will
          * work, but let's try the compilation locally.
+         //这里代表我们甚至无法创建临时文件以储存服务器端的错误, 要是这样我们其他事情也没
+         //什么希望了, 不过我们还是尝试去本地编译
          * FIXME: this will blame the server for a failure that is
          * local. However, we don't make any distrinction between
          * all the reasons dcc_compile_remote can fail either;
          * and some of those reasons are local.
-         */
-        goto fallback;
+         *///这里有个bug, 这里会错怪服务器, 因为可能错误是本地的, 因为我们并没有
+         //区分dcc_compile_remote
+        goto fallback;//卧槽!fallback应该怎么翻译
     }
 
     /* Lock ordering invariant: always acquire the lock for the
-     * remote host (if any) first. */
+     * remote host (if any) first. *///加锁策略:总是先锁远程host
 
     /* Choose the distcc server host (which could be either a remote
      * host or localhost) and acquire the lock for it.  */
-    if ((ret = dcc_pick_host_from_list_and_lock_it(&host, &cpu_lock_fd)) != 0) {
+    //选择一个服务器, 可能是远程, 可能是本地, 然后请求加锁之
+    if ((ret = dcc_pick_host_from_list_and_lock_it(&host, &cpu_lock_fd)) != 0) {//这个实现在where.c
         /* Doesn't happen at the moment: all failures are masked by
            returning localhost. */
         goto fallback;
     }
+    //到这里已经取得了host和相应的锁id, 然而并没有作负载均衡, 排名靠前的总是被调用编译
+    // 但是负载均衡是否有意义又是一个问题, 如果是独占用于编译的, 不均衡也没关系
     if (host->mode == DCC_MODE_LOCAL) {
+        // 如果取得了一个local, 就本地处理了
         /* We picked localhost and already have a lock on it so no
          * need to lock it now. */
         goto run_local;
@@ -562,17 +630,20 @@ dcc_build_somewhere(char *argv[],
 
     /* Lock the local CPU, since we're going to be doing preprocessing
      * or include scanning. */
-    if ((ret = dcc_lock_local_cpp(&local_cpu_lock_fd)) != 0) {
+    //对本地加锁, 以便进行预处理和include扫描(卧槽, 瞬间怀疑cpp这三个字母的理解)
+    if ((ret = dcc_lock_local_cpp(&local_cpu_lock_fd)) != 0) {//这个local_cpu_lock_fd
         goto fallback;
     }
-
+    //cpp_where意指在哪预处理, 所以cpp应该是comfile preprocessing的意思
     if (host->cpp_where == DCC_CPP_ON_SERVER) {
+        //如果是要在远程预处理, 那可能不是一个好主意
         /* Perhaps it is not a good idea to preprocess on the server. */
+        // 处理一些特殊情况, 把预处理改成本地进行
         dcc_perhaps_adjust_cpp_where_and_protover(input_fname, host,
                                                   discrepancy_filename);
     }
-    if (dcc_scan_includes) {
-        ret = dcc_approximate_includes(host, argv);
+    if (dcc_scan_includes) {//如果需要扫描include
+        ret = dcc_approximate_includes(host, argv);//这个定义在include_server_if.c
         goto unlock_and_clean_up;
     }
     if (host->cpp_where == DCC_CPP_ON_SERVER) {
@@ -807,17 +878,19 @@ int dcc_build_somewhere_timed(char *argv[],
     struct timeval before, after, delta;
     int ret;
 
-    if (gettimeofday(&before, NULL))
+    if (gettimeofday(&before, NULL))//这个是系统调用, 获取时间用的
         rs_log_warning("gettimeofday failed");
 
     ret = dcc_build_somewhere(argv, sg_level, status);
+    //这看起来是阻塞的不是?
 
     if (gettimeofday(&after, NULL)) {
         rs_log_warning("gettimeofday failed");
     } else {
         /* TODO: Show rate based on cpp size?  Is that meaningful? */
+        //当然, 用文件大小来衡量复杂性是木有意义的
         timeval_subtract(&delta, &after, &before);
-
+        //这是统计编译时间吗?
         rs_log(RS_LOG_INFO|RS_LOG_NONAME,
                "elapsed compilation time %ld.%06lds",
                delta.tv_sec, (long) delta.tv_usec);

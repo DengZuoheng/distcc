@@ -68,14 +68,14 @@ int dcc_mark_timefile(const char *lockname,
     if ((ret = dcc_make_lock_filename(lockname, host, 0, &filename)))
         return ret;
 
-    if ((ret = dcc_open_lockfile(filename, &fd))) {
+    if ((ret = dcc_open_lockfile(filename, &fd))) {//这个定义在lock.c
         free(filename);
         return ret;
     }
 
     /* Merely opening it with O_WRONLY is not necessarily enough to set its
      * mtime to the current time. */
-    if (write(fd, "x", 1) != 1) {
+    if (write(fd, "x", 1) != 1) {//这就是写了个叉吗?
         rs_log_error("write to %s failed: %s", lockname, strerror(errno));
         dcc_close(fd);
         return EXIT_IO_ERROR;
@@ -95,6 +95,7 @@ int dcc_mark_timefile(const char *lockname,
 /**
  * Remove the specified timestamp.
  **/
+ //移除掉相应的timefile
 int dcc_remove_timefile(const char *lockname,
                         const struct dcc_hostdef *host)
 {
@@ -127,6 +128,7 @@ int dcc_remove_timefile(const char *lockname,
  *
  * If the timestamp doesn't exist then we count it as time zero.
  **/
+ //应该只是返回了lock文件的最后更改时间
 int dcc_check_timefile(const char *lockname,
                        const struct dcc_hostdef *host,
                        time_t *mtime)
@@ -134,11 +136,11 @@ int dcc_check_timefile(const char *lockname,
     char *filename;
     struct stat sb;
     int ret;
-
+    //构造一个lock文件的文件名的字符串
     if ((ret = dcc_make_lock_filename(lockname, host, 0, &filename)))
         return ret;
 
-    if (stat(filename, &sb) == -1) {
+    if (stat(filename, &sb) == -1) {//获取文件信息, 这个需要研究一下
         *mtime = (time_t) 0;
         if (errno == ENOENT) {
             /* just no record for this file; that's fine. */
@@ -151,7 +153,7 @@ int dcc_check_timefile(const char *lockname,
         }
     }
 
-    *mtime = sb.st_mtime;
+    *mtime = sb.st_mtime;//获取最后修改时间
 
     free(filename);
 

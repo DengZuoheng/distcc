@@ -68,22 +68,26 @@ int dcc_talk_to_include_server(char **argv, char ***files)
 
     /* for testing purposes, if INCLUDE_SERVER_STUB is set,
        use its value rather than the include server */
+    //这里用于测试, 如果INCLUDE_SERVER_STUB被设置了, 就用这个而不用include server
     stub = getenv("INCLUDE_SERVER_STUB");
     if (stub != NULL) {
-        ret = dcc_tokenize_string(stub, files);
+        ret = dcc_tokenize_string(stub, files);//这个应该是空白字符分词
         rs_log_warning("INCLUDE_SERVER_STUB is set to '%s'; "
                        "ignoring include server",
                        dcc_argv_tostr(*files));
         return ret;
+        //这里是要提前返回的
     }
 
     include_server_port = getenv("INCLUDE_SERVER_PORT");
+    //获取include_server的端口号, 说明有client的地方就有include_server
+    //但是这个include_server_port是既有server又有port还是只有port?
     if (include_server_port == NULL) {
         rs_log_warning("INCLUDE_SERVER_PORT not set - "
                        "did you forget to run under 'pump'?");
         return 1;
     }
-
+    //检查include_server_port长度是否合理
     if (strlen(include_server_port) >= ((int)sizeof(sa.sun_path) - 1)) {
         rs_log_warning("$INCLUDE_SERVER_PORT is longer than %ld characters",
                        ((long) sizeof(sa.sun_path) - 1));
@@ -92,14 +96,15 @@ int dcc_talk_to_include_server(char **argv, char ***files)
 
     strcpy(sa.sun_path, include_server_port);
     sa.sun_family = AF_UNIX;
-
+    //创建连接
     if (dcc_connect_by_addr((struct sockaddr *) &sa, sizeof(sa), &fd))
         return 1;
 
     /* TODO? switch include_server to use more appropriate token names */
+    //也许我们应该换一个更好的名字给include_server
     if (dcc_x_cwd(fd) ||
-        dcc_x_argv(fd, "ARGC", "ARGV", argv) ||
-        dcc_r_argv(fd, "ARGC", "ARGV", files)) {
+        dcc_x_argv(fd, "ARGC", "ARGV", argv) ||//这里发送完了就再读回来, 存到files中
+        dcc_r_argv(fd, "ARGC", "ARGV", files)) {//所以说是阻塞的
         rs_log_warning("failed to talk to include server '%s'",
                        include_server_port);
         dcc_close(fd);
@@ -116,6 +121,7 @@ int dcc_talk_to_include_server(char **argv, char ***files)
         rs_log_warning("include server gave up analyzing");
         return 1;
     }
+    //files是用于返回的
     return 0;
 }
 
@@ -173,9 +179,11 @@ int dcc_get_original_fname(const char *fname, char **original_fname)
  * This implements the --scan_includes option.
  * Talks to the include server, and prints the results to stdout.
  */
+ // 这里实现了 --scan_includes选项, 告诉include server然后打印结果到标准输出
 int
 dcc_approximate_includes(struct dcc_hostdef *host, char **argv)
 {
+    //这里有点奇怪, 感觉这个函数并没有什么意义
     char **files;
     int i;
     int ret;
@@ -187,8 +195,8 @@ dcc_approximate_includes(struct dcc_hostdef *host, char **argv)
         return EXIT_DISTCC_FAILED;
         //return 0;
     }
-
-    if ((ret = dcc_talk_to_include_server(argv, &files))) {
+    // 这个实现在上面, 把argv发送到include_server, 然后把结果放到files
+    if ((ret = dcc_talk_to_include_server(argv, &files))) {//argv应该是输入参数, files应该是输出参数
         rs_log_error("failed to get includes from include server");
         return ret;
     }

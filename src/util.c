@@ -84,7 +84,8 @@ void dcc_exit(int exitcode)
     exit(exitcode);
 }
 
-
+//golang的解决方案
+//http://stackoverflow.com/questions/13244048/no-startswith-endswith-functions-in-go
 int str_endswith(const char *tail, const char *tiger)
 {
     size_t len_tail = strlen(tail);
@@ -107,6 +108,7 @@ int str_startswith(const char *head, const char *worm)
 /**
  * Skim through NULL-terminated @p argv, looking for @p s.
  **/
+ //判断argv中是否包含某一参数
 int argv_contains(char **argv, const char *s)
 {
     while (*argv) {
@@ -130,7 +132,8 @@ int dcc_redirect_fd(int fd, const char *fname, int mode)
 
     /* ignore errors */
     close(fd);
-
+    //关掉fd, 然后打开fname到newfd, 然后就没了?
+    //卧槽这看不懂啊
     newfd = open(fname, mode, 0666);
     if (newfd == -1) {
         rs_log_crit("failed to reopen fd%d onto %s: %s",
@@ -151,6 +154,7 @@ char *dcc_gethostname(void)
     static char myname[100] = "\0";
 
     if (!myname[0]) {
+        //golang os有Hostname()
         if (gethostname(myname, sizeof myname - 1) == -1)
             strcpy(myname, "UNKNOWN");
     }
@@ -163,6 +167,7 @@ char *dcc_gethostname(void)
  * Look up a boolean environment option, which must be either "0" or
  * "1".  The default, if it's not set or is empty, is @p default.
  **/
+ // 获取一个环境变量, 并尝试解析成bool型变量
 int dcc_getenv_bool(const char *name, int default_value)
 {
     const char *e;
@@ -187,7 +192,7 @@ int dcc_getenv_bool(const char *name, int default_value)
  * Otherwise places pointer to domain in *domain_name and returns 0.
  *
  * This should yield the same result as the linux command
- * 'dnsdomainname' or 'hostname -d'.
+ * 'dnsdomainname' or 'hostname -d'. //这两命名都不知道什么回事
  **/
 int dcc_get_dns_domain(const char **domain_name)
 {
@@ -254,6 +259,7 @@ int dcc_get_dns_domain(const char **domain_name)
         /* If hostname has a dot in it, assume it's the DNS address */
         if (!strchr(host_name, '.')) {
             /* Otherwise ask DNS what our full hostname is */
+            //这要请求dns的
             h = gethostbyname(host_name);
             if (h == NULL) {
                 rs_log_error("failed to look up self \"%s\": %s", host_name,
@@ -284,7 +290,7 @@ int dcc_get_dns_domain(const char **domain_name)
 }
 
 
-
+// 这他妈看不懂
 /**
  * Set the `FD_CLOEXEC' flag of DESC if VALUE is nonzero,
  * or clear the flag if VALUE is 0.
@@ -319,6 +325,8 @@ int set_cloexec_flag (int desc, int value)
  **/
 int dcc_ignore_sigpipe(int val)
 {
+    //忽略掉sigpipe信号, 如果val是1, 就用默认的sig_ign, 如果是
+    // 0, 就用默认的sig_del
     if (signal(SIGPIPE, val ? SIG_IGN : SIG_DFL) == SIG_ERR) {
         rs_log_warning("signal(SIGPIPE, %s) failed: %s",
                        val ? "ignore" : "default",
@@ -337,6 +345,8 @@ int dcc_ignore_sigpipe(int val)
  * If we find a distcc masquerade dir on the PATH, remove all the dirs up
  * to that point.
  **/
+ //通过编译器名字找到完整的路径, 
+ // 通过检索PATH里面的每一条路径, 然后拼接判断是否存在
 int dcc_trim_path(const char *compiler_name)
 {
     const char *envpath, *newpath, *p, *n;
@@ -395,6 +405,7 @@ int dcc_trim_path(const char *compiler_name)
 }
 
 /* Set the PATH environment variable to the indicated value. */
+//重设path环境变量
 int dcc_set_path(const char *newpath)
 {
     char *buf;
@@ -415,6 +426,7 @@ int dcc_set_path(const char *newpath)
 /* Return the supplied path with the current-working directory prefixed (if
  * needed) and all "dir/.." references removed.  Supply path_len if you want
  * to use only a substring of the path string, otherwise make it 0. */
+// 获取绝对路径
 char *dcc_abspath(const char *path, int path_len)
 {
     static char buf[MAXPATHLEN];
@@ -462,7 +474,7 @@ char *dcc_abspath(const char *path, int path_len)
     }
     return buf;
 }
-
+//比较两个时间对象是否相等
 /* Return -1 if a < b, 0 if a == b, and 1 if a > b */
 int dcc_timecmp(struct timeval a, struct timeval b) {
     if (a.tv_sec < b.tv_sec) {
@@ -480,7 +492,7 @@ int dcc_timecmp(struct timeval a, struct timeval b) {
     }
 }
 
-
+//获取当前运行的进程矢量
 /* Return the current number of running processes. */
 int dcc_getcurrentload(void) {
 #if defined(linux)
@@ -518,6 +530,8 @@ void dcc_getloadavg(double loadavg[3]) {
   int i;
 
 #if defined(HAVE_GETLOADAVG)
+  //http://linux.die.net/man/3/getloadavg
+  //获取平均负载
   num = getloadavg(loadavg, 3);
 #else
   num = 0;
@@ -542,11 +556,14 @@ void dcc_getloadavg(double loadavg[3]) {
  * If there is no more string, then @p pdst is instead set to NULL, no
  * memory is allocated, and @p psrc is not advanced.
  **/
+
 int dcc_dup_part(const char **psrc, char **pdst, const char *sep)
 {
     size_t len;
 
     len = strcspn(*psrc, sep);
+    //find first char which exist in sep, 
+    // exmaple strcspn('fcba73,'1234567890') == 4
     if (len == 0) {
         *pdst = NULL;
     } else {
@@ -555,6 +572,7 @@ int dcc_dup_part(const char **psrc, char **pdst, const char *sep)
             return EXIT_OUT_OF_MEMORY;
         }
         strncpy(*pdst, *psrc, len);
+        //返回未遇到sep字符前的字符串
         (*pdst)[len] = '\0';
         (*psrc) += len;
     }
@@ -563,7 +581,7 @@ int dcc_dup_part(const char **psrc, char **pdst, const char *sep)
 }
 
 
-
+//删除文件, 用的还是unlink
 int dcc_remove_if_exists(const char *fname)
 {
     if (unlink(fname) && errno != ENOENT) {
@@ -574,7 +592,7 @@ int dcc_remove_if_exists(const char *fname)
     return 0;
 }
 
-
+//这个函数有点吊
 /* Returns the number of processes in state D, the max non-cc/c++ RSS in kb and
  * the max RSS program's name */
 void dcc_get_proc_stats(int *num_D, int *max_RSS, char **max_RSS_name) {
@@ -657,6 +675,8 @@ void dcc_get_proc_stats(int *num_D, int *max_RSS, char **max_RSS_name) {
 
 
 /* Returns the number of sector read/writes since boot */
+//获取从io开始, 硬盘读写了多上扇区
+// 这他么有什么用?
 void dcc_get_disk_io_stats(int *n_reads, int *n_writes) {
 #if defined(linux)
     int retval;
@@ -736,6 +756,7 @@ void dcc_get_disk_io_stats(int *n_reads, int *n_writes) {
 #ifndef HAVE_STRLCPY
 /* like strncpy but does not 0 fill the buffer and always null
    terminates. bufsize is the size of the destination buffer */
+//自动加null结尾的strncpy
  size_t strlcpy(char *d, const char *s, size_t bufsize)
 {
     size_t len = strlen(s);
@@ -749,6 +770,7 @@ void dcc_get_disk_io_stats(int *n_reads, int *n_writes) {
 #endif
 
 #ifndef HAVE_STRSEP
+//例子:http://blog.csdn.net/yinlijun2004/article/details/5740068
 static char* strsep(char** str, const char* delims)
 {
     char* token;
@@ -756,9 +778,12 @@ static char* strsep(char** str, const char* delims)
     if (*str == NULL) {
         return NULL;
     }
-
+    //str是一个指向字符指针的指针, *str指向一个字符指针, **str指向一个字符
+    //或者str是指向字符串的指针, *str是一个字符串, **str是这个字符串的第一个字符
     token = *str;
     while (**str != '\0') {
+        //strchr是在字符串中找到第一个某字符串
+        //通常是这么用的, strchr("str",'s')==0
         if (strchr(delims, **str) != NULL) {
             **str = '\0';
             (*str)++;
@@ -776,6 +801,7 @@ static char* strsep(char** str, const char* delims)
    the input's whitespace-separated parts.
    Returns 0 on success, 1 on error.
  */
+   //空白字符分词, 结果存到argv_ptr
 int dcc_tokenize_string(const char *input, char ***argv_ptr)
 {
     size_t n_spaces = 0;
@@ -830,6 +856,8 @@ int dcc_tokenize_string(const char *input, char ***argv_ptr)
 }
 
 #ifndef HAVE_GETLINE
+//这就是个getline
+//golang这种是有内建的吧
 ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
     static const int buffer_size_increment = 100;
     char *buffer;

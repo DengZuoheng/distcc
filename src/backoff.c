@@ -67,7 +67,7 @@ int dcc_enjoyed_host(const struct dcc_hostdef *host)
     bp = getenv("DISTCC_BACKOFF_PERIOD");
     if (bp && (atoi(bp) == 0))
 	return 0;
-
+    //移除掉相应的文件, 下次check的时候更新时间就是0了
     return dcc_remove_timefile("backoff", host);
 }
 
@@ -81,21 +81,21 @@ int dcc_disliked_host(const struct dcc_hostdef *host)
 	return 0;
 
     /* i hate you (but only for dcc_backoff_period seconds) */
-    return dcc_mark_timefile("backoff", host);
+    return dcc_mark_timefile("backoff", host);//这个定义在timefile.c, 就是给文件里写点东西
 }
 
-
+//这是用来检查host是否能用的
 static int dcc_check_backoff(struct dcc_hostdef *host)
 {
     int ret;
-    time_t mtime;
-
-    if ((ret = dcc_check_timefile("backoff", host, &mtime)))
+    time_t mtime;//这个mtime是backoff文件的最后更新时间
+    if ((ret = dcc_check_timefile("backoff", host, &mtime)))//这个实现在timefile.c
         return ret;
+    //检查说的最后更新时间是不是早于一个检查周期, 如果小于, 这说明还在检查中, 返回"忙"
+    if (difftime(time(NULL), mtime) < (double) dcc_backoff_period) {//计算时间间隔的
 
-    if (difftime(time(NULL), mtime) < (double) dcc_backoff_period) {
         rs_trace("still in backoff period for %s", host->hostdef_string);
-        return EXIT_BUSY;
+        return EXIT_BUSY;//这个在exit_code.h中定义, 表示114
     }
 
     return 0;
@@ -105,6 +105,7 @@ static int dcc_check_backoff(struct dcc_hostdef *host)
 /**
  * Walk through @p hostlist and remove any hosts that are marked unavailable.
  **/
+ //移除掉所有被标记为不可用的, 似乎在backoff周期中的也会被认为不可用
 int dcc_remove_disliked(struct dcc_hostdef **hostlist)
 {
     struct dcc_hostdef *h;
@@ -113,13 +114,14 @@ int dcc_remove_disliked(struct dcc_hostdef **hostlist)
     bp = getenv("DISTCC_BACKOFF_PERIOD");
     if (bp)
 	dcc_backoff_period = atoi(bp);
+    //获取一个backoff频率, 但是backoff频率又是什么鬼
 
     /* special-case: if DISTCC_BACKOFF_PERIOD==0, don't manage backoff files */
-    if (dcc_backoff_period == 0)
+    if (dcc_backoff_period == 0)//这是特例, 不处理
 	return 0;
-
+    //这个backoff在这里只是用来判断是否要处理backoff的
     while ((h = *hostlist) != NULL) {
-        if (dcc_check_backoff(h) != 0) {
+        if (dcc_check_backoff(h) != 0) {//每个去check一下, 然后删除掉有问题的
             rs_trace("remove %s from list", h->hostdef_string);
             *hostlist = h->next;
             free(h);

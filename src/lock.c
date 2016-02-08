@@ -134,6 +134,7 @@ struct dcc_hostdef *dcc_hostdef_local_cpp = &_dcc_local_cpp;
 /**
  * Returns a newly allocated buffer.
  **/
+ //按一定规则构造一个lock文件名来
 int dcc_make_lock_filename(const char *lockname,
                            const struct dcc_hostdef *host,
                            int iter,
@@ -143,7 +144,8 @@ int dcc_make_lock_filename(const char *lockname,
     int ret;
     char *lockdir;
 
-    if ((ret = dcc_get_lock_dir(&lockdir)))
+    //其实就是$top_dir/lock
+    if ((ret = dcc_get_lock_dir(&lockdir)))//这个定义在tempfile.c
         return ret;
 
     if (host->mode == DCC_MODE_LOCAL) {
@@ -173,6 +175,8 @@ int dcc_make_lock_filename(const char *lockname,
  * Get an exclusive, non-blocking lock on a file using whatever method
  * is available on this system.
  *
+ // 获取一个非阻塞的, 排它锁, golang没有原生的文件锁, 可能得自己写一个
+ // golang sys包有类似物, 但看起来不跨平台
  * @retval 0 if we got the lock
  * @retval -1 with errno set if the file is already locked.
  **/
@@ -196,8 +200,7 @@ static int sys_lock(int fd, int block)
 #endif
 }
 
-
-
+//这个是解锁, 都是系统调用, 不知道怎么办
 int dcc_unlock(int lock_fd)
 {
 #if defined(F_SETLK)
@@ -237,17 +240,22 @@ int dcc_unlock(int lock_fd)
 /**
  * Open a lockfile, creating if it does not exist.
  **/
+ // 打开一个lock文件, 如果不存在, 就创建之
 int dcc_open_lockfile(const char *fname, int *plockfd)
 {
     /* Create if it doesn't exist.  We don't actually do anything with
      * the file except lock it.
      *
+     //我们除了加锁什么也不干
      * The file is created with the loosest permissions allowed by the user's
      * umask, to give the best chance of avoiding problems if they should
      * happen to use a shared lock dir. */
+     // 文件以松散的权限创建, 允许用户的umask, 
     /* FIXME: If we fail to open with EPERM or something similar, try deleting
      * the file and try again.  That might fix problems with root-owned files
      * in user home directories. */
+     // 有个bug: 如果我们因为EPERM之类的错误打开文件失败, 应该尝试删除之, 然后重试
+     // 这可能修复root权限的文件却放在user home目录的情况
     *plockfd = open(fname, O_WRONLY|O_CREAT, 0666);
     if (*plockfd == -1 && errno != EEXIST) {
         rs_log_error("failed to creat %s: %s", fname, strerror(errno));
@@ -261,21 +269,33 @@ int dcc_open_lockfile(const char *fname, int *plockfd)
 /**
  * Lock a server slot, in either blocking or nonblocking mode.
  *
+ // 锁住一个server slot, 以阻塞或非阻塞模式
+
  * In blocking mode, this function will not return until either the lock has
- * been acquired, or an error occured.  In nonblocking mode, it will instead
+ * been acquired, or an error occured.  
+// 如果是阻塞模式, 这个函数在成功获取锁或者出错前是不会返回的
+ In nonblocking mode, it will instead
+ // 如果是非阻塞模式, 函数就不一样了
+
  * return EXIT_BUSY if some other process has this slot locked.
  *
+ // 如果别的进程拿着这个slot的说, 函数会返回一个EXIT_BUSY
+
  * @param slot 0-based index of available slots on this host.
+ slot是从0开始的这个host的所有slot的索引
  * @param block True for blocking mode.
  *
+ //设置是否用阻塞模式
  * @param lock_fd On return, contains the lock file descriptor to allow
  * it to be closed.
+ // 文件锁的lock_fd
  **/
 int dcc_lock_host(const char *lockname,
                   const struct dcc_hostdef *host,
                   int slot, int block,
                   int *lock_fd)
 {
+    //找到host的slot的对应的锁文件, 然后加锁
     char *fname;
     int ret;
 
@@ -284,13 +304,15 @@ int dcc_lock_host(const char *lockname,
     return EXIT_BUSY;
 
     if ((ret = dcc_make_lock_filename(lockname, host, slot, &fname)))
+        //获取锁文件名
         return ret;
-
+    //然后打开文件获取文件描述符
     if ((ret = dcc_open_lockfile(fname, lock_fd)) != 0) {
         free(fname);
         return ret;
     }
 
+    //系统调用给文件加锁, 其他进程就无法再加锁了
     if (sys_lock(*lock_fd, block) == 0) {
         rs_trace("got %s lock on %s slot %d as fd%d", lockname,
                  host->hostdef_string, slot, *lock_fd);
@@ -312,7 +334,7 @@ int dcc_lock_host(const char *lockname,
             break;
         }
 
-        dcc_close(*lock_fd);
+        dcc_close(*lock_fd);//如果加锁失败要关闭文件
         free(fname);
         return ret;
     }

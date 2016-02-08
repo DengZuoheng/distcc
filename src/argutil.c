@@ -57,6 +57,7 @@
 /**
  * Return true if argv contains needle as an argument.
  **/
+ //这只是简单的查找而已, 找到都不用返回具体值
 int dcc_argv_search(char **a,
                     const char *needle)
 {
@@ -66,7 +67,7 @@ int dcc_argv_search(char **a,
     return 0;
 }
 
-
+//在缺失argc的情况下, 统计argv的长度
 unsigned int dcc_argv_len(char **a)
 {
     unsigned int i;
@@ -79,6 +80,8 @@ unsigned int dcc_argv_len(char **a)
 
 /* Free a malloc'd argv structure.  Only safe when the array and all its
  * components were malloc'd. */
+//释放argv, 当然得在我们copy了之类的情况下, 直接free系统给那个不知道什么后果
+
 void dcc_free_argv(char **argv)
 {
     char **a;
@@ -92,12 +95,13 @@ void dcc_free_argv(char **argv)
 /* Copy an argv array, adding extra NULL elements to the end to allow for
  * adding more arguments later.
  */
+ //总之就是复制argv, delta会增加内存以备用
 int dcc_copy_argv(char **from, char ***out, int delta)
 {
     char **b;
     int l, i;
 
-    l = dcc_argv_len(from);
+    l = dcc_argv_len(from);//先统计长度
     b = malloc((l+1+delta) * (sizeof from[0]));
     if (b == NULL) {
         rs_log_error("failed to allocate copy of argv");
@@ -127,6 +131,7 @@ int dcc_copy_argv(char **from, char ***out, int delta)
  * @return newly-allocated string containing representation of
  * arguments.
  **/
+ //将argv转化为字符串, 应该只是用于调试
 char *dcc_argv_tostr(char **a)
 {
     int l, i;

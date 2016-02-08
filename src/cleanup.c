@@ -48,9 +48,9 @@
  *
  * Volatile because it can be read from signal handlers.
  **/
-char *volatile *volatile cleanups = 0;   /* Dynamically allocated array. */
+char *volatile *volatile cleanups = 0;   /* Dynamically allocated array. */  //这里有个全局变量, 是个字符串数组, 易变的
 volatile int cleanups_size = 0; /* The length of the array. */
-volatile int n_cleanups = 0;    /* The number of entries used. */
+volatile int n_cleanups = 0;    /* The number of entries used. *///这相当于维护了一个vector
 
 static void dcc_cleanup_tempfiles_inner(int from_signal_handler);
 
@@ -59,6 +59,7 @@ void dcc_cleanup_tempfiles(void)
     dcc_cleanup_tempfiles_inner(0);
 }
 
+//这个从dcc入口的信号绑定直接调用过来的
 void dcc_cleanup_tempfiles_from_signal_handler(void)
 {
     dcc_cleanup_tempfiles_inner(1);
@@ -82,7 +83,8 @@ void dcc_cleanup_tempfiles_from_signal_handler(void)
  * to remove them from the list, otherwise it will eventually overflow
  * in prefork mode.
  */
-static void dcc_cleanup_tempfiles_inner(int from_signal_handler)
+ //这就是说各个临时文件的目录和文件路径都储存在cleanups上, 这里把他们都删了
+static void dcc_cleanup_tempfiles_inner(int from_signal_handler)//这个算bool is_from_signal_handler
 {
     int i;
     int done = 0;
@@ -90,17 +92,18 @@ static void dcc_cleanup_tempfiles_inner(int from_signal_handler)
 
     /* do the unlinks from the last to the first file.
      * This way, directories get deleted after their files. */
-
+    //因为目录和文件都储存在这
      /* tempus fugit */
+    // 这里是倒序删除
     for (i = n_cleanups - 1; i >= 0; i--) {
         if (save) {
-            rs_trace("skip cleanup of %s", cleanups[i]);
+            rs_trace("skip cleanup of %s", cleanups[i]);//卧槽, 这cleanups哪里来的
         } else {
             /* Try removing it as a directory first, and
              * if that fails, try removing is as a file.
              * Report the error from removing-as-a-file
              * if both fail. */
-            if ((rmdir(cleanups[i]) == -1) &&
+            if ((rmdir(cleanups[i]) == -1) && //有文件也有目录
                 (unlink(cleanups[i]) == -1) &&
                 (errno != ENOENT)) {
                 rs_log_notice("cleanup %s failed: %s", cleanups[i],
@@ -110,6 +113,8 @@ static void dcc_cleanup_tempfiles_inner(int from_signal_handler)
         }
         n_cleanups = i;
         if (from_signal_handler) {
+            //如果是中断引发的清理, 可能是不安全的, 所以不能直接free, 但是程序也会退出, 所以内存泄露
+
             /* It's not safe to call free() in this case.
              * Don't worry about the memory leak - we're about
              * to exit the process anyway. */
@@ -127,6 +132,8 @@ static void dcc_cleanup_tempfiles_inner(int from_signal_handler)
  * Add to the list of files to delete on exit.
  * If it runs out of memory, it returns non-zero.
  */
+ //这相当于给cleanup数组push_back一下, golang中有append函数可以使用
+ //远古时代写个代码真的不容易啊
 int dcc_add_cleanup(const char *filename)
 {
     char *new_filename;

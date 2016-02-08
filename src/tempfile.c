@@ -316,6 +316,7 @@ int dcc_get_top_dir(char **path_ret)
  * Return a subdirectory of the DISTCC_DIR of the given name, making
  * sure that the directory exists.
  **/
+//获取一个子目录(指出福安, 其实就是$top_dir/$name
 int dcc_get_subdir(const char *name,
                           char **dir_ret)
 {
@@ -333,6 +334,7 @@ int dcc_get_subdir(const char *name,
     return dcc_mkdir(*dir_ret);
 }
 
+//获取锁文件的目录, 其实就是$top_dir/lock
 int dcc_get_lock_dir(char **dir_ret)
 {
     static char *cached;
@@ -342,7 +344,7 @@ int dcc_get_lock_dir(char **dir_ret)
         *dir_ret = cached;
         return 0;
     } else {
-        ret = dcc_get_subdir("lock", dir_ret);
+        ret = dcc_get_subdir("lock", dir_ret);//其实就是获取$top_dir/lock
         if (ret == 0)
             cached = *dir_ret;
         return ret;
@@ -371,12 +373,15 @@ int dcc_get_state_dir(char **dir_ret)
  * Create a file inside the temporary directory and register it for
  * later cleanup, and return its name.
  *
+ //创建一个文件放到临时文件中, 并且注册一下以便待会清理, 当然, 得返回文件名
  * The file will be reopened later, possibly in a child.  But we know
  * that it exists with appropriately tight permissions.
+ //这个文件迟点还会被重新打开, 可能在子节点中, 但是我们知道我们弄的权限是合适的
  **/
+ //创建一个临时文件 $name_ret = $topdir/$prefix_$some_random_bit$suffix
 int dcc_make_tmpnam(const char *prefix,
                     const char *suffix,
-                    char **name_ret)
+                    char **name_ret)//第三个参数是用来返回的
 {
     char *s = NULL;
     const char *tempdir;
@@ -384,25 +389,25 @@ int dcc_make_tmpnam(const char *prefix,
     unsigned long random_bits;
     int fd;
 
-    if ((ret = dcc_get_tmp_top(&tempdir)))
+    if ((ret = dcc_get_tmp_top(&tempdir)))//先找到顶级目录
         return ret;
 
-    if (access(tempdir, W_OK|X_OK) == -1) {
+    if (access(tempdir, W_OK|X_OK) == -1) {//然后检查我们有没有相应权限
         rs_log_error("can't use TMPDIR \"%s\": %s", tempdir, strerror(errno));
         return EXIT_IO_ERROR;
     }
 
-    random_bits = (unsigned long) getpid() << 16;
+    random_bits = (unsigned long) getpid() << 16;//然后弄一个随机数?
 
 # if HAVE_GETTIMEOFDAY
     {
         struct timeval tv;
-        gettimeofday(&tv, NULL);
-        random_bits ^= tv.tv_usec << 16;
+        gettimeofday(&tv, NULL);//然后还获取一个日期
+        random_bits ^= tv.tv_usec << 16;//还是为了随机数
         random_bits ^= tv.tv_sec;
     }
 # else
-    random_bits ^= time(NULL);
+    random_bits ^= time(NULL);//卧槽, 这处理有点复杂
 # endif
 
 #if 0
@@ -442,7 +447,7 @@ int dcc_make_tmpnam(const char *prefix,
 
     if ((ret = dcc_add_cleanup(s))) {
         /* bailing out */
-        unlink(s);
+        unlink(s);//注册失败就先删除掉
         free(s);
         return ret;
     }

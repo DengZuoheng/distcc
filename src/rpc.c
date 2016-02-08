@@ -60,11 +60,13 @@
  * that handle communication.
  **/
 
-
+// golang有原生的rpc库
+// 这个文件应该不用怎么研究, 因为都是读写一些整型,字符串什么的, 可能有特别的开头
 /**
  * Transmit token name (4 characters) and value (32-bit int, as 8 hex
  * characters).
  **/
+//这应该是要转换成16进制或二进制的, 反正以token形式发送一个int
 int dcc_x_token_int(int ofd, const char *token, unsigned param)
 {
     char buf[13];
@@ -99,16 +101,17 @@ int dcc_x_token_int(int ofd, const char *token, unsigned param)
 int dcc_x_result_header(int ofd,
                         enum dcc_protover protover)
 {
+    //发送一个DONE
     return dcc_x_token_int(ofd, "DONE", protover);
 }
 
-
+//发送一个status, 实际上是一个整数
 int dcc_x_cc_status(int ofd, int status)
 {
     return dcc_x_token_int(ofd, "STAT", (unsigned) status);
 }
 
-
+//读一个字符
 int dcc_r_token(int ifd, char *buf)
 {
     return dcc_readx(ifd, buf, 4);
@@ -121,6 +124,7 @@ int dcc_r_token(int ifd, char *buf)
  * some other network problem.  Whatever's happened, a bit more debugging
  * information would be handy.
  **/
+ //如果碰见没法解释的返回, 就输出这些问题信息
 int dcc_explain_mismatch(const char *buf,
                          size_t buflen,
                          int ifd)

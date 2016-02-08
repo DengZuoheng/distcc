@@ -31,30 +31,39 @@
                  * These days, though, you have to be pretty technical
                  * before you can even aspire to crudeness.
                  *              -- William Gibson, "Johnny Mnemonic" */
+                //              -- 以前的人都是这样装逼的吗-_-
 
 
 /**
  * @file
  *
  * Routines to decide on which machine to run a distributable job.
+ //决定用哪个machine来执行分布式job
  *
  * The current algorithm (new in 1.2 and subject to change) is as follows.
- *
+ //卧槽, 这还是有算法的
+
  * CPU lock is held until the job is complete.
  *
+ // 一直拿着cpu锁知道job完成
  * Once the request has been transmitted, the lock is released and a second
  * job can be sent.
  *
+ // 一旦request传输完成. lock就释放然后下一个job就可以发送.
+
  * Servers which wish to limit their load can defer accepting jobs, and the
  * client will block with that lock held.
+ // 如果server想限制他们的负载, 那么他们可以延迟接收的job, 这样, cklient会阻塞并
+ //一直拿着锁
  *
  * cpp is probably cheap enough that we can allow it to run unlocked.  However
  * that is not true for local compilation or linking.
  *
+ // c++也许比较低成本以至于我们可以不加锁就跑(卧槽), 然而, 本地不能这样玩
  * @todo Write a test harness for the host selection algorithm.  Perhaps a
  * really simple simulation of machines taking different amounts of time to
  * build stuff?
- */
+ *///todo:我们得写个测试
 
 #include <config.h>
 
@@ -93,17 +102,17 @@ int dcc_pick_host_from_list_and_lock_it(struct dcc_hostdef **buildhost,
     if ((ret = dcc_get_hostlist(&hostlist, &n_hosts)) != 0) {
         return EXIT_NO_HOSTS;
     }
-
-    if ((ret = dcc_remove_disliked(&hostlist)))
+    //移除掉不可用的
+    if ((ret = dcc_remove_disliked(&hostlist)))//在backoff.c中实现
         return ret;
 
     if (!hostlist) {
         return EXIT_NO_HOSTS;
     }
 
-    return dcc_lock_one(hostlist, buildhost, cpu_lock_fd);
+    return dcc_lock_one(hostlist, buildhost, cpu_lock_fd);//后两者是返回值
 
-    /* FIXME: Host list is leaked? */
+    /* FIXME: Host list is leaked? *///泄露关我屁事, 反正golang有gc
 }
 
 
@@ -115,16 +124,20 @@ static void dcc_lock_pause(void)
      * relatively cheap; sleeping when we should be working is bad.  However,
      * if we hit this code at all we're overloaded, so sleeping a while is
      * perhaps OK.
+     //我觉得多轮询几次成本也不会太高, 但是我们需要work的时候睡了, 就不好了
+     // 然后, 我们会运行到这里说明系统已经过载了, 所以睡会应该没关系
      *
      * We don't use exponential backoff, because that would tend to prefer
      * later arrivals and penalize jobs that have been waiting for a long
      * time.  This would mean more compiler processes hanging around than is
      * really necessary, and also by making jobs complete very-out-of-order is
      * more likely to find Makefile bugs. */
+     // 我们没有采用指数的增长, 是因为我们担心睡太久, 这意味着我们的编译进程超过其
+     //所需的量, 也意味着我们job的完成顺序不对, 很可能是makefile的问题
 
     unsigned pause_time_ms = 1000;
 
-    char *pt = getenv("DISTCC_PAUSE_TIME_MSEC");
+    char *pt = getenv("DISTCC_PAUSE_TIME_MSEC");//环境变量可以设置睡多少毫秒
     if (pt)
 	pause_time_ms = atoi(pt);
 
@@ -143,13 +156,17 @@ static void dcc_lock_pause(void)
  * Find a host that can run a distributed compilation by examining local state.
  * It can be either a remote server or localhost (if that is in the list).
  *
+ //通过检查本地状态, 找到一个可以分布式编译的主机
+
  * This function does not return (except for errors) until a host has been
  * selected.  If necessary it sleeps until one is free.
  *
+ // 这个函数会阻塞直到有一个找到一个host
  * @todo We don't need transmit locks for local operations.
+ //todo: 本地操作的话, 我们并不需要传输锁(但是这个函数里面就没有传输锁的操作啊, 这什么意思啊?)
  **/
 static int dcc_lock_one(struct dcc_hostdef *hostlist,
-                        struct dcc_hostdef **buildhost,
+                        struct dcc_hostdef **buildhost,//后两参数应该是返回值
                         int *cpu_lock_fd)
 {
     struct dcc_hostdef *h;
@@ -157,17 +174,22 @@ static int dcc_lock_one(struct dcc_hostdef *hostlist,
     int ret;
 
     while (1) {
-        for (i_cpu = 0; i_cpu < 50; i_cpu++) {
-            for (h = hostlist; h; h = h->next) {
-                if (i_cpu >= h->n_slots)
+        for (i_cpu = 0; i_cpu < 50; i_cpu++) {//这个50是什么意思?说明i_cpu只在[0,50]中取?
+            for (h = hostlist; h; h = h->next) {//遍历hostlist, 找到一个可以锁的
+                if (i_cpu >= h->n_slots)//如果i_cpu大于host的slot数量, 就不用它
+                    //n_slots指出这个host能跑几个job, 是用户设置的, 这里的遍历也会遍历slot号
+                    // 如果所有host的1号slot都锁了, 才找2号slot, 也算一种负载均衡策略吧
+                    //至少不会把一号host跑满
                     continue;
-
-                ret = dcc_lock_host("cpu", h, i_cpu, 0, cpu_lock_fd);
+                //然后尝试去获取锁
+                ret = dcc_lock_host("cpu", h, i_cpu, 0, cpu_lock_fd);//这个定义在lock.c
 
                 if (ret == 0) {
                     *buildhost = h;
+                    //这个实现在state.c, 应该是i_cpu是一个slot, 传到my_state的全局变量
                     dcc_note_state_slot(i_cpu, strcmp(h->hostname, "localhost") == 0 ? DCC_LOCAL : DCC_REMOTE);
                     return 0;
+                    //note完就返回了
                 } else if (ret == EXIT_BUSY) {
                     continue;
                 } else {
@@ -176,7 +198,7 @@ static int dcc_lock_one(struct dcc_hostdef *hostlist,
                 }
             }
         }
-
+        //阻塞的, 知道可以获取锁
         dcc_lock_pause();
     }
 }
@@ -198,8 +220,11 @@ int dcc_lock_local_cpp(int *cpu_lock_fd)
 {
     int ret;
     struct dcc_hostdef *chosen;
+    //dcc_lock_one的第一个参数是host_list, 后面两个参数是返回值
+    //dcc_host_local_cpp是一个全局对象, 定义与lock.c
     ret = dcc_lock_one(dcc_hostdef_local_cpp, &chosen, cpu_lock_fd);
     if (ret == 0) {
+        //DCC_PHASE_CPP是一个slot号
         dcc_note_state(DCC_PHASE_CPP, NULL, chosen->hostname, DCC_LOCAL);
     }
     return ret;

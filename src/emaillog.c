@@ -71,6 +71,7 @@ void dcc_setup_log_email(void) {
     dcc_make_tmpnam("distcc_error_log", "txt", &email_fname);
 
     email_fileno = open(email_fname, O_RDWR | O_TRUNC);
+    //这开了个文件, 然后什么时候send呀?
     if (email_fileno >= 0) {
       rs_add_logger(rs_logger_file, RS_LOG_DEBUG, NULL, email_fileno);
       rs_trace_set_level(RS_LOG_DEBUG);
@@ -117,7 +118,8 @@ int dcc_add_file_to_log_email(const char *description,
 
   return 0;
 }
-
+//distcc.c main函数最后调用了这个
+//如果设置正确, 就发个邮件
 void dcc_maybe_send_email(void) {
   int child_pid = 0;
   const char *whom_to_blame;
@@ -149,6 +151,7 @@ void dcc_maybe_send_email(void) {
   if (child_pid == 0) {
     if (dup2(email_fileno, 0) == -1 ||
         lseek(email_fileno, 0, SEEK_SET) == -1 ||
+        //调用系统的mail程序来发送
         execl(logmailer,
               logmailer, "-s", email_subject, whom_to_blame,
               (char*)NULL) == -1) {

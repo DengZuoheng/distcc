@@ -50,11 +50,11 @@
 /**
  * @file
  *
- * @brief Client-side RPC functions.
+ * @brief Client-side RPC functions.//远程调用
  **/
 
 /*
- * Transmit header for whole request.
+ * Transmit header for whole request.//传输整个request的header
  */
 int dcc_x_req_header(int fd,
                      enum dcc_protover protover)
@@ -65,7 +65,7 @@ int dcc_x_req_header(int fd,
 
 
 /**
- * Transmit an argv-type array.
+ * Transmit an argv-type array.//相当于传输一个argv的数组
  **/
 int dcc_x_argv(int fd,
                const char *argc_token,
@@ -90,7 +90,7 @@ int dcc_x_argv(int fd,
 }
 
 /**
- * Transmit the current working directory
+ * Transmit the current working directory//传输当前工作目录
  */
 int dcc_x_cwd(int fd)
 {

@@ -81,7 +81,7 @@ const char *rs_program_name = "distcc";
  * In particular, for masqueraded mode, we want to make sure that we
  * don't invoke distcc recursively.
  **/
-
+//显示帮助信息
 static void dcc_show_usage(void)
 {
     dcc_show_version("distcc");
@@ -136,10 +136,13 @@ static void dcc_show_usage(void)
     DISTCC_DEFAULT_PORT);
 }
 
+//SIG_DFL default signal handling
+//SIG_IGN signal is ignored
 
 static RETSIGTYPE dcc_client_signalled (int whichsig)
 {
-    signal(whichsig, SIG_DFL);
+    signal(whichsig, SIG_DFL);//第二个参数应该是回调函数, 这个意思是重新设成默认行为吗
+    //这个意思是只响应一次, 然后就清空临时文件然后退出?
 
 #ifdef HAVE_STRSIGNAL
     rs_log_info("%s", strsignal(whichsig));
@@ -147,18 +150,18 @@ static RETSIGTYPE dcc_client_signalled (int whichsig)
     rs_log_info("terminated by signal %d", whichsig);
 #endif
 
-    dcc_cleanup_tempfiles_from_signal_handler();
+    dcc_cleanup_tempfiles_from_signal_handler();//在cleanup.c中
 
     raise(whichsig);
 
 }
 
-
+//相当于绑定dcc客户端要响应的信号
 static void dcc_client_catch_signals(void)
 {
-    signal(SIGTERM, &dcc_client_signalled);
-    signal(SIGINT, &dcc_client_signalled);
-    signal(SIGHUP, &dcc_client_signalled);
+    signal(SIGTERM, &dcc_client_signalled);//终止信号
+    signal(SIGINT, &dcc_client_signalled);//ctrl+信号
+    signal(SIGHUP, &dcc_client_signalled);//sent to a process when its controlling terminal is closed
 }
 
 static void dcc_free_hostlist(struct dcc_hostdef *list) {
@@ -172,8 +175,9 @@ static void dcc_free_hostlist(struct dcc_hostdef *list) {
 static void dcc_show_hosts(void) {
     struct dcc_hostdef *list, *l;
     int nhosts;
-
-    if (dcc_get_hostlist(&list, &nhosts) != 0) {
+    //get一个host列表, 一个个打印出来
+    if (dcc_get_hostlist(&list, &nhosts) != 0) {//这个定义在host.c
+        //这个涉及解析HOST环境变量和
         rs_log_crit("Failed to get host list");
         return;
     }
@@ -181,7 +185,7 @@ static void dcc_show_hosts(void) {
     for (l = list; l; l = l->next)
         printf("%s\n", l->hostdef_string);
 
-    dcc_free_hostlist(list);
+    dcc_free_hostlist(list);//释放列表内存
 }
 
 static void dcc_concurrency_level(void) {
@@ -196,8 +200,10 @@ static void dcc_concurrency_level(void) {
 
     for (l = list; l; l = l->next)
         nslots += l->n_slots;
+    //把host列表get回来, 然后把所有slots加起来
 
     dcc_free_hostlist(list);
+    //然后free掉
 
     printf("%i\n", nslots);
 }
@@ -220,7 +226,7 @@ static void dcc_gssapi_show_principal(void) {
 /**
  * distcc client entry point.
  *
- * This is typically called by make in place of the real compiler.
+ * This is typically called by make in place of the real compiler. 在make中代替真的编译器
  *
  * Performs basic setup and checks for distcc arguments, and then kicks off
  * dcc_build_somewhere().
@@ -232,33 +238,41 @@ int main(int argc, char **argv)
     char *compiler_name; /* points into argv[0] */
     int ret;
 
-    dcc_client_catch_signals();
-    atexit(dcc_cleanup_tempfiles);
-    atexit(dcc_remove_state_file);
+    dcc_client_catch_signals();//这个定义就在上面, 这个也是清空临时文件, 不过是信号退出, 相当于异常中断
+    atexit(dcc_cleanup_tempfiles);//退出时清空临时文件, 而这个是正常退出, 这个也在cleanup.c中定义
+    atexit(dcc_remove_state_file);//退出时移除状态文件, 定义在state.h/state.c
 
     dcc_set_trace_from_env();
-    dcc_setup_log_email();
+    //trace是回溯的意思, distcc.h中定义, traceenv中实现
+    //实际上应该是初始化logger的意思
+    dcc_setup_log_email();//这个定义在emaillog.c和emaillog.h
+    //这是一个发邮件的logger, 完成之后调用系统功能发送邮件, 
+    //golang中有smtp包, 但这不重要, 我们先不管
 
-    dcc_trace_version();
+    dcc_trace_version();//回溯版本是几个意思?
+    //这个函数定义在distcc.h, 实现在help.c, 相当于打印version信息
 
     compiler_name = (char *) dcc_find_basename(argv[0]);
+    //这个dcc_find_basename定义在distcc.h, 实现在filename.c
 
 #if HAVE_LIBIBERTY    
     /* Expand @FILE arguments. */
-    expandargv(&argc, &argv);
+    expandargv(&argc, &argv);//这是lib iberty特有的, golang不一定有
+    //可能得自己重写
 #endif
  
     /* Ignore SIGPIPE; we consistently check error codes and will
      * see the EPIPE. */
-    dcc_ignore_sigpipe(1);
+    dcc_ignore_sigpipe(1);//这在util.h定义, 在util.c实现
 
-    sg_level = dcc_recursion_safeguard();
+    sg_level = dcc_recursion_safeguard();//这个定义在distcc.h, 实现在safeguard.c
 
     rs_trace("compiler name is \"%s\"", compiler_name);
-
+    //complier_name是argv[0], 所以这是起始参数为distcc的情况
     if (strstr(compiler_name, "distcc") != NULL) {
+        //如果编译器名中找到了distcc, 那多半有问题
         /* Either "distcc -c hello.c" or "distcc gcc -c hello.c" */
-        if (argc <= 1) {
+        if (argc <= 1) {//比如没有参数, 就warnning一下
             fprintf (stderr,
                      "%s: missing option/operand\n"
                      "Try `%s --help' for more information.\n",
@@ -268,30 +282,34 @@ int main(int argc, char **argv)
         }
 
         if (!strcmp(argv[1], "--help")) {
+            //如果是help命令, 就打印usage信息
             dcc_show_usage();
             ret = 0;
+            //然后退出, 退出时复杂操作, 所以goto
             goto out;
         }
 
         if (!strcmp(argv[1], "--version")) {
-            dcc_show_version("distcc");
+            //如果是version信息, 就打印version
+            dcc_show_version("distcc");//实现在help.c
             ret = 0;
             goto out;
         }
 
         if (!strcmp(argv[1], "--show-hosts")) {
-            dcc_show_hosts();
+            dcc_show_hosts();//实现在上面
             ret = 0;
             goto out;
         }
 
         if (!strcmp(argv[1], "-j")) {
-            dcc_concurrency_level();
+            dcc_concurrency_level();//实现就在上面, 把所有host的slot加起来就是了
             ret = 0;
             goto out;
         }
 
         if (!strcmp(argv[1], "--scan-includes")) {
+            //这是一个flag设置
             if (argc <= 2) {
                 fprintf (stderr,
                          "%s: missing operand\n"
@@ -300,18 +318,18 @@ int main(int argc, char **argv)
                 ret = EXIT_BAD_ARGUMENTS;
                 goto out;
             }
-            dcc_scan_includes = 1;
-            argv++;
+            dcc_scan_includes = 1;//全局变量, 定义在compile.h中
+            argv++;//这里会改变argv[1]
         }
 
-#ifdef HAVE_GSSAPI
+#ifdef HAVE_GSSAPI//https://en.wikipedia.org/wiki/Generic_Security_Services_Application_Program_Interface
 	    if (!strcmp(argv[1], "--show-principal")) {
-	        dcc_gssapi_show_principal();
+	        dcc_gssapi_show_principal();//定义在dopt.c中, 其实就是打印一个环境变量
 	        ret = 0;
 	        goto out;
 	    }
 #endif
-
+            //这个find_compiler在implicit.h中定义,implicit.c中实现
         if ((ret = dcc_find_compiler(argv, &compiler_args)) != 0) {
             goto out;
         }
@@ -325,17 +343,22 @@ int main(int argc, char **argv)
         if ((ret = dcc_trim_path(compiler_name)) != 0)
             goto out;
 #endif
-    } else {
+    } else {//这就是起始参数不是distcc的情况
         /* Invoked as "cc -c hello.c", with masqueraded path */
+        //就是用cc为始调用的
         if ((ret = dcc_support_masquerade(argv, compiler_name,
                                           &tweaked_path)) != 0)
+            //tweaked_path在main函数开始的时候定义的, 初始为0
+            //dcc_support_masquerade在distcc.h中定义, 在climasq.c中实现
+            //应该是找到compiler_name的真实路径, 并将其设为环境变量中的PATH
             goto out;
 
         if ((ret = dcc_copy_argv(argv, &compiler_args, 0)) != 0) {
+            //将argv复制到compiler_args
             goto out;
         }
         free(compiler_args[0]);
-        compiler_args[0] = strdup(compiler_name);
+        compiler_args[0] = strdup(compiler_name);//将第一个参数替换成正确的compiler_name
         if (!compiler_args[0]) {
             rs_log_error("strdup failed - out of memory?");
             ret = EXIT_OUT_OF_MEMORY;
@@ -343,18 +366,20 @@ int main(int argc, char **argv)
         }
     }
 
-    if (sg_level - tweaked_path > 0) {
+    if (sg_level - tweaked_path > 0) {//这两个参数是防止递归调用的
+        //可能递归了
         rs_log_crit("distcc seems to have invoked itself recursively!");
         ret = EXIT_RECURSION;
         goto out;
     }
-
-    ret = dcc_build_somewhere_timed(compiler_args, sg_level, &status);
+    //这句是重点, 实现在compile.c, 这就要100行好吗
+    //然后就去执行编译了
+    ret = dcc_build_somewhere_timed(compiler_args, sg_level, &status);//status是一个输出参数
     compiler_args = NULL; /* dcc_build_somewhere_timed already free'd it. */
 
     out:
     if (compiler_args) {
-      dcc_free_argv(compiler_args);
+      dcc_free_argv(compiler_args);//这个在argutil.c中
     }
     dcc_maybe_send_email();
     dcc_exit(ret);

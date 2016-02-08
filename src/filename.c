@@ -55,6 +55,8 @@
 /**
  * Return a pointer to the extension, including the dot, or NULL.
  **/
+ //返回文件的扩展名
+ //golang filepath包可代替
 char * dcc_find_extension(char *sfile)
 {
     char *dot;
@@ -73,6 +75,7 @@ char * dcc_find_extension(char *sfile)
  * Same as dcc_find_extension(), but the argument and return
  * value are both pointers to const.
  **/
+ //返回文件的扩展名, 常量版
 const char * dcc_find_extension_const(const char *sfile) {
 #if 0
   return dcc_find_extension((char *) sfile);
@@ -92,6 +95,8 @@ const char * dcc_find_extension_const(const char *sfile) {
  * last slash.)  If there is no slash, return the whole filename,
  * which is presumably in the current directory.
  **/
+ // 返回文件名最后一个斜杠之后的东西, 比如/etc/usr/gcc, 就返回gcc
+ // 同样golang.file.filepath
 const char * dcc_find_basename(const char *sfile)
 {
     char *slash;
@@ -111,6 +116,7 @@ const char * dcc_find_basename(const char *sfile)
  *  If the filename ends with a slash, just lop off the last slash.
  *  Note: this is destructive.
  */
+ //截断文件名, 需要测试一下什么效果
 void dcc_truncate_to_dirname(char *file)
 {
     char *slash = 0;
@@ -124,7 +130,7 @@ void dcc_truncate_to_dirname(char *file)
     }
 }
 
-
+//重新设置扩展名
 static int dcc_set_file_extension(const char *sfile,
                                   const char *new_ext,
                                   char **ofile)
@@ -173,6 +179,7 @@ static int dcc_set_file_extension(const char *sfile,
  * @returns preprocessed extension, (e.g. ".i"), or NULL if
  * unrecognized.
  **/
+ //将源文件的扩展名映射成预处理文件的扩展名
 const char * dcc_preproc_exten(const char *e)
 {
     if (e[0] != '.')
@@ -180,18 +187,23 @@ const char * dcc_preproc_exten(const char *e)
     e++;
     if (!strcmp(e, "i") || !strcmp(e, "c")) {
         return ".i";
+    //两个c是怎么回事?
     } else if (!strcmp(e, "c") || !strcmp(e, "cc")
                || !strcmp(e, "cpp") || !strcmp(e, "cxx")
                || !strcmp(e, "cp") || !strcmp(e, "c++")
                || !strcmp(e, "C") || !strcmp(e, "ii")) {
         return ".ii";
+    //后面这些扩展名都不认识啊
     } else if(!strcmp(e,"mi") || !strcmp(e, "m")) {
         return ".mi";
+    
     } else if(!strcmp(e,"mii") || !strcmp(e,"mm")
                 || !strcmp(e,"M")) {
         return ".mii";
+    
     } else if (!strcasecmp(e, "s")) {
         return ".s";
+    
     } else {
         return NULL;
     }
@@ -202,6 +214,8 @@ const char * dcc_preproc_exten(const char *e)
  * Does the extension of this file indicate that it is already
  * preprocessed?
  **/
+ //相当于判断文件是否经过预处理, 其实是判定文件的扩展名, 如果是预处理文件的
+ //扩展名, 就当做是预处理了的, 否则不是
 int dcc_is_preprocessed(const char *sfile)
 {
     const char *dot, *ext;
@@ -211,9 +225,9 @@ int dcc_is_preprocessed(const char *sfile)
     ext = dot+1;
 
     switch (ext[0]) {
-#ifdef ENABLE_REMOTE_ASSEMBLE
+#ifdef ENABLE_REMOTE_ASSEMBLE//汇编需要特别的设置?
     case 's':
-        /* .S needs to be run through cpp; .s does not */
+        /* .S needs to be run through cpp; .s does not *///这他么谁知道啊
         return !strcmp(ext, "s");
 #endif
     case 'i':
@@ -231,6 +245,7 @@ int dcc_is_preprocessed(const char *sfile)
 /**
  * Work out whether @p sfile is source based on extension
  **/
+ // 同理判断文件是不是源文件, 主要还是看扩展名
 int dcc_is_source(const char *sfile)
 {
     const char *dot, *ext;
@@ -241,7 +256,8 @@ int dcc_is_source(const char *sfile)
 
     /* you could expand this out further into a RE-like set of case
      * statements, but i'm not sure it's that important. */
-
+    //这里需要考虑一下性能和正则表达式的问题吗?
+    //或者是. 我们不应该写死
     switch (ext[0]) {
     case 'i':
         return !strcmp(ext, "i")
@@ -279,6 +295,7 @@ int dcc_is_source(const char *sfile)
  * Decide whether @p filename is an object file, based on its
  * extension.
  **/
+ // 判断某个文件是不是obj文件, 其实就是判断扩展名是不是.o
 int dcc_is_object(const char *filename)
 {
     const char *dot;
@@ -291,6 +308,8 @@ int dcc_is_object(const char *filename)
 
 
 /* Some files should always be built locally... */
+// 有一些文件总是需要本地处理, 比如以conftest., tmp.conftest.开头的
+// 这里是否需要来个配置文件, 然后设置各种pattern, 
 int
 dcc_source_needs_local(const char *filename)
 {
@@ -320,6 +339,8 @@ dcc_source_needs_local(const char *filename)
  * @param sfile Source filename.  Assumed to match one of the
  * recognized patterns, otherwise bad things might happen.
  **/
+ //这里是改名吗, 需要测试一下
+ //来自arg.c中的调用, 因为没有.o参数, 于是将xx.c自动匹配成xx.o什么的
 int dcc_output_from_source(const char *sfile,
                            const char *out_extn,
                            char **ofile)

@@ -90,15 +90,16 @@
 #include "exitcode.h"
 #include "snprintf.h"
 
-
+//append一个参数到argv
 int dcc_argv_append(char **argv, char *toadd)
 {
     int l = dcc_argv_len(argv);
-    argv[l] = toadd;
+    argv[l] = toadd;//这么随便就加真的大丈夫?
     argv[l+1] = NULL;           /* just make sure */
     return 0;
 }
 
+//这就是打个log而已
 static void dcc_note_compiled(const char *input_file, const char *output_file)
 {
     const char *input_base, *output_base;
@@ -114,21 +115,30 @@ static void dcc_note_compiled(const char *input_file, const char *output_file)
  * Parse arguments, extract ones we care about, and also work out
  * whether it will be possible to distribute this invocation remotely.
  *
+解析参数, 提取我们需要的信息, 并分析是否可以分布式处理
+
  * This is a little hard because the cc argument rules are pretty complex, but
  * the function still ought to be simpler than it already is.
  *
+ 这有点复杂, 毕竟编译器参数很TM复杂, 整个函数应该可以写得更简洁一些
  * This code is called on both the client and the server, though they use the
  * results differently.
  *
+ 这个代码可能类client和server调用, 虽然他们的结果并不一样
  * This function makes a copy of the arguments, modified to ensure that
  * the arguments include '-o <filename>'.  This is returned in *ret_newargv.
  * The copy is dynamically allocated and the caller is responsible for
  * deallocating it.
  *
+ 这个函数会复制argv, 然后修改之, 使其确保具有'-o <filename>'. 这会ret_newargv参数返回
+ 释放内存应该交由调用者处理
  * @returns 0 if it's ok to distribute this compilation, or an error code.
  **/
+ //也许会返回个错误号码什么的
+ // 处理一些需要本地操作的选项, 看看有没有-o, 没有就尽量自动补全
 int dcc_scan_args(char *argv[], char **input_file, char **output_file,
                   char ***ret_newargv)
+//第一个参数是输入参数, 后面的可能都是输出参数
 {
     int seen_opt_c = 0, seen_opt_s = 0;
     int i;
@@ -138,28 +148,36 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
      /* allow for -o foo.o */
     if ((ret = dcc_copy_argv(argv, ret_newargv, 2)) != 0)
         return ret;
+        //这里应该是参加两个参数位来房子-o和foo.o
     argv = *ret_newargv;
 
-    /* FIXME: new copy of argv is leaked */
+    /* FIXME: new copy of argv is leaked *///这里是怎么泄露的?
+    //copy了然而返回错误所以没有释放?
 
     dcc_trace_argv("scanning arguments", argv);
 
     /* Things like "distcc -c hello.c" with an implied compiler are
      * handled earlier on by inserting a compiler name.  At this
      * point, argv[0] should always be a compiler name. */
+     // distcc -c这种应该高就被处理了, 所以在这里应当是正确的编译器
     if (argv[0][0] == '-') {
+        //第一个参数是个option说明有问题
         rs_log_error("unrecognized distcc option: %s", argv[0]);
         exit(EXIT_BAD_ARGUMENTS);
     }
 
     *input_file = *output_file = NULL;
-
+    //先把这两置空
+    //这个循环主要是寻找-o参数(文件名), -c, -S两个flag, 以及判断必须在本地进行的情况(各种选项)
     for (i = 0; (a = argv[i]); i++) {
+        //然后每个option去研究一下
         if (a[0] == '-') {
-            if (!strcmp(a, "-E")) {
+            //如果是选项
+            if (!strcmp(a, "-E")) {// -E是仅仅进行预处理阶段, 不往下编译
                 rs_trace("-E call for cpp must be local");
                 return EXIT_DISTCC_FAILED;
-            } else if (!strcmp(a, "-MD") || !strcmp(a, "-MMD")) {
+            } else if (!strcmp(a, "-MD") || !strcmp(a, "-MMD")) {//-MD is equivalent to -M -MF file
+                //这两应该输出依赖头文件, MMD是不输出系统依赖
                 /* These two generate dependencies as a side effect.  They
                  * should work with the way we call cpp. */
             } else if (!strcmp(a, "-MG") || !strcmp(a, "-MP")) {
@@ -179,13 +197,16 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
                     It implies -E, so only the preprocessor is run,
                     not the compiler.  There would be no point trying
                     to distribute it even if we could. */
+                    //仅仅是预处理的情况就别分布式了, 必须本地
                 rs_trace("%s implies -E (maybe) and must be local", a);
                 return EXIT_DISTCC_FAILED;
             } else if (!strcmp(a, "-march=native")) {
+                //有这个不知道什么选项的也必须本地
                 rs_trace("-march=native generates code for local machine; "
                          "must be local");
                 return EXIT_DISTCC_FAILED;
             } else if (!strcmp(a, "-mtune=native")) {
+                //这个也不知道怎么回事啊
                 rs_trace("-mtune=native optimizes for local machine; "
                          "must be local");
                 return EXIT_DISTCC_FAILED;
@@ -198,11 +219,14 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
                 if (strstr(a, ",-a") || strstr(a, "--MD")) {
                     rs_trace("%s must be local", a);
                     return EXIT_DISTCC_FAILED;
+                    //这我已经不知道怎么回事
                 }
             } else if (str_startswith("-specs=", a)) {
                 rs_trace("%s must be local", a);
+                //这个也不知道
                 return EXIT_DISTCC_FAILED;
             } else if (!strcmp(a, "-S")) {
+                //这应该是汇编的flag
                 seen_opt_s = 1;
             } else if (!strcmp(a, "-fprofile-arcs")
                        || !strcmp(a, "-ftest-coverage")
@@ -221,18 +245,21 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
                 return EXIT_DISTCC_FAILED;
             } else if (!strcmp(a, "-c")) {
                 seen_opt_c = 1;
+                //这是编译的flag
             } else if (!strcmp(a, "-o")) {
                 /* Whatever follows must be the output */
                 a = argv[++i];
+                //找到了-o就直接跳去GOT_OUTPUT, 但是GOT_OUTPUT还在循环内
                 goto GOT_OUTPUT;
             } else if (str_startswith("-o", a)) {
                 a += 2;         /* skip "-o" */
                 goto GOT_OUTPUT;
             }
-        } else {
+        } else {//这个是 不以"-"开头的, 也许是源文件, 
             if (dcc_is_source(a)) {
                 rs_trace("found input file \"%s\"", a);
                 if (*input_file) {
+                    //输入两个源文件就不work了
                     rs_log_info("do we have two inputs?  i give up");
                     return EXIT_DISTCC_FAILED;
                 }
@@ -245,6 +272,7 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
                     return EXIT_DISTCC_FAILED;
                 }
                 *output_file = a;
+                //先把output_file赋值了, 然后因为刚刚已经++过一次, 所以循环体会跳过这个文件名
             }
         }
     }
@@ -252,18 +280,21 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
     /* TODO: ccache has the heuristic of ignoring arguments that are not
      * extant files when looking for the input file; that's possibly
      * worthwile.  Of course we can't do that on the server. */
+     //ccache有个科学的方法, 要不要参考一下?
 
     if (!seen_opt_c && !seen_opt_s) {
+        //既没有-c, 也没有-S, 说明不是编译, 所以就直接返回
         rs_log_info("compiler apparently called not for compile");
         return EXIT_DISTCC_FAILED;
     }
 
     if (!*input_file) {
+        //如果没有找到要编译的源文件, 也放弃
         rs_log_info("no visible input file");
         return EXIT_DISTCC_FAILED;
     }
 
-    if (dcc_source_needs_local(*input_file))
+    if (dcc_source_needs_local(*input_file))//一些特殊的文件是需要本地处理的
         return EXIT_DISTCC_FAILED;
 
     if (!*output_file) {
@@ -279,22 +310,26 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
 
         /* -S takes precedence over -c, because it means "stop after
          * preprocessing" rather than "stop after compilation." */
+        //-S的优先级更大, 因为这意味着预处理之后就停止, 而不是编译后停止
         if (seen_opt_s) {
+            //自动补输出文件
             if (dcc_output_from_source(*input_file, ".s", &ofile))
                 return EXIT_DISTCC_FAILED;
         } else if (seen_opt_c) {
             if (dcc_output_from_source(*input_file, ".o", &ofile))
                 return EXIT_DISTCC_FAILED;
         } else {
+            //这里不应该发生
             rs_log_crit("this can't be happening(%d)!", __LINE__);
             return EXIT_DISTCC_FAILED;
         }
         rs_log_info("no visible output file, going to add \"-o %s\" at end",
                       ofile);
+        //把输出文件添加到argv尾部
         dcc_argv_append(argv, strdup("-o"));
         dcc_argv_append(argv, ofile);
         *output_file = ofile;
-    }
+    }//这个endif是判断是否有output_file的, 没有就根据源文件名添加一个
 
     dcc_note_compiled(*input_file, *output_file);
 
@@ -303,6 +338,7 @@ int dcc_scan_args(char *argv[], char **input_file, char **output_file,
          * stdout", or "write to a file called '-'".  We can't know,
          * so we just always run it locally.  Hopefully this is a
          * pretty rare case. */
+         //不同的编译器对" -o -"的处理不同, 所以还是本地处理好了
         rs_log_info("output to stdout?  running locally");
         return EXIT_DISTCC_FAILED;
     }
@@ -417,20 +453,23 @@ int dcc_set_input(char **a, char *ifname)
  * a "-Wp,..." option into regular gcc options.
  * Returns the number of extra arguments needed.
  */
+ //直接将'-Wp,'开头的参数传到这里
 static int count_extra_args(char *dash_Wp_option) {
     int extra_args = 0;
     char *comma = dash_Wp_option + strlen("-Wp");
     while (comma != NULL) {
-        char *opt = comma + 1;
-        comma = strchr(opt, ',');
+        char *opt = comma + 1;//opt是逗号后一个位置
+        comma = strchr(opt, ',');//更新逗号位置
         if (str_startswith("-MD,", opt) ||
-            str_startswith("-MMD,", opt))
+            str_startswith("-MMD,", opt))//如果以'-MD'或'-MMD'开头, 
         {
+            //那就在这个opt开始继续找逗号, 这种增加三个
             char *filename = comma + 1;
             comma = strchr(filename, ',');
             extra_args += 3;  /* "-MD", "-MF", filename. */
         } else {
             extra_args++;
+            //其他情况就加1个
         }
     }
     return extra_args;
@@ -443,6 +482,8 @@ static int count_extra_args(char *dash_Wp_option) {
  * Destructively modifies dash_Wp_option as it goes.
  * Returns 0 on success, nonzero for error (out of memory).
  */
+ //"Wp,"选项是直接给预处理器传参数, 但是, 预处理器不应该给用户直接使用, 所以不建议使用
+ //所以这里就把MD和MMD改成了MF
 static int copy_extra_args(char **dest_argv, char *dash_Wp_option,
                            int extra_args) {
     int i = 0;
@@ -451,9 +492,10 @@ static int copy_extra_args(char **dest_argv, char *dash_Wp_option,
         char *opt = comma + 1;
         comma = strchr(opt, ',');
         if (comma) *comma = '\0';
-        dest_argv[i] = strdup(opt);
+        dest_argv[i] = strdup(opt);//先把原始选项copy了
         if (!dest_argv[i]) return EXIT_OUT_OF_MEMORY;
         i++;
+        //再特别处理一下MD和MMD
         if (strcmp(opt, "-MD") == 0 || strcmp(opt, "-MMD") == 0) {
             char *filename;
             if (!comma) {
@@ -461,6 +503,9 @@ static int copy_extra_args(char **dest_argv, char *dash_Wp_option,
                                "filename argument");
                 break;
             }
+            //带文件名的应该是这样的:    -Wp,-MD,FOO.d 
+            //参考: https://llvm.org/svn/llvm-project/cfe/trunk/test/Driver/Wp-args.c
+            //http://malihou2008.blog.163.com/blog/static/2118200452013102815732432/
             filename = comma + 1;
             comma = strchr(filename, ',');
             if (comma) *comma = '\0';
@@ -470,25 +515,48 @@ static int copy_extra_args(char **dest_argv, char *dash_Wp_option,
             dest_argv[i] = strdup(filename);
             if (!dest_argv[i]) return EXIT_OUT_OF_MEMORY;
             i++;
+            //综上是把MD, MMD改成MF
         }
     }
     assert(i == extra_args);
     return 0;
+    /*
+    r = []
+    l = dest_argv.split(',')
+    for i in l:
+        r.append(i)
+        if i=='-MD' or i =='-MMD':
+            r.append('-MF',l[i+1])
+            i++ #跳过filename
+    return ' '.join(r)
+
+    */
 }
 
 
 /*
  * Convert any "-Wp," options into regular gcc options.
+ //把-Wp选项转换成正规形式
  * We do this because it simplifies the command-line
- * option handling elsewhere; this is the only place
+ * option handling elsewhere; 
+// 我们这么做是为了简化命令以在别的地方方便处理
+ this is the only place
  * that needs to parse "-Wp," options.
+ // 这是唯一要解析'-Wp,'选项的地方
  * Returns 0 on success, nonzero for error (out of memory).
  *
  * The argv array pointed to by argv_ptr when this function
  * is called must have been dynamically allocated.  It remains
  * the caller's responsibility to deallocate it.
  */
+ // Wp,是一种奇怪的预处理选项, 形如: gcc -Wp,-lang-c-c++-comments -c source.c
 int dcc_expand_preprocessor_options(char ***argv_ptr) {
+    /*
+    for item,i in argv:
+        if item.start_with('-Wp,'):
+            argv.insert(i,extra_args(argv[i]))
+            //注意这个选项的顺序不能改变
+    */
     int i, j, ret;
     char **argv = *argv_ptr;
     char **new_argv;
